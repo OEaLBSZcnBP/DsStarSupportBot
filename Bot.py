@@ -403,7 +403,7 @@ async def help_cmd(m: types.Message):
         "• /offtop — про оффтоп\n"
         "• /search запрос — Яндекс\n"
         "• /commands — каталог команд\n\n"
-        "💡 Инлайн: @DsStarSupportBot каталог / о ботах")
+        "💡 Инлайн: @DsStarSupportBot каталог / о ботах / сделать чат спец.")
 
 
 # ============ INLINE РЕЖИМ ============
@@ -418,7 +418,7 @@ async def inline_handler(q: types.InlineQuery):
             InlineQueryResultArticle(
                 id="about-1",
                 title="🤖 О ботах",
-                description="Узнать на чём написаны боты",
+                description="Инфо о ботах",
                 input_message_content=InputTextMessageContent(
                     message_text="ℹ️ О ботах:\n\nЯзык программирования: Python.\nБиблиотека: Aiogram."
                 )
@@ -430,8 +430,8 @@ async def inline_handler(q: types.InlineQuery):
         results.append(
             InlineQueryResultArticle(
                 id="catalog-1",
-                title="📂 Каталог специальных чатов",
-                description="StarHub, Пряники, Мафия",
+                title="📂 Каталог",
+                description="Специальные чаты",
                 input_message_content=InputTextMessageContent(
                     message_text=(
                         "📂 Специальные чаты:\n\n"
@@ -446,21 +446,41 @@ async def inline_handler(q: types.InlineQuery):
             )
         )
 
+    # ============ "сделать свой чат специальным" ============
+    elif query in ["сделать свой чат специальным", "спец чат", "спецчат", "сделать спец", "сделать чат специальным", "специальный чат"]:
+        results.append(
+            InlineQueryResultArticle(
+                id="specchat-1",
+                title="✨ Сделать свой чат специальным",
+                description="Сделать мой чат специальным",
+                input_message_content=InputTextMessageContent(
+                    message_text=(
+                        "✨ Чтобы сделать свой чат специальным нужно:\n\n"
+                        "1) Зайти в чат t.me/DeliciousStarHub.\n\n"
+                        "2) Зайти в тему «Техническая поддержка» и написать сообщение с #спец чат.\n"
+                        "В сообщение должна быть подробная информация о чате, о чем он, и тому подобная информация.\n\n"
+                        "3) Ждать ответ админа/владельца, если чат по описанию подойдет вас попросят дать ссылку на чат в секретном сообщении @PPBBOT, чтобы убедиться, что вся информация правдива.\n"
+                        "Если ваш чат подойдет, вы сможете добавить саппорта себе в чат."
+                    )
+                )
+            )
+        )
+
     # Если ничего не нашли — показываем все доступные
     if not results:
         results = [
             InlineQueryResultArticle(
                 id="about-default",
                 title="🤖 О ботах",
-                description="Узнать на чём написаны боты",
+                description="Инфо о ботах",
                 input_message_content=InputTextMessageContent(
                     message_text="ℹ️ О ботах:\n\nЯзык программирования: Python.\nБиблиотека: Aiogram."
                 )
             ),
             InlineQueryResultArticle(
                 id="catalog-default",
-                title="📂 Каталог чатов",
-                description="StarHub, Пряники, Мафия",
+                title="📂 Каталог",
+                description="Специальные чаты",
                 input_message_content=InputTextMessageContent(
                     message_text=(
                         "📂 Специальные чаты:\n\n"
@@ -472,10 +492,25 @@ async def inline_handler(q: types.InlineQuery):
                         "https://t.me/DarkMafiaChat11"
                     )
                 )
+            ),
+            InlineQueryResultArticle(
+                id="specchat-default",
+                title="✨ Сделать свой чат специальным",
+                description="Сделать мой чат специальным",
+                input_message_content=InputTextMessageContent(
+                    message_text=(
+                        "✨ Чтобы сделать свой чат специальным нужно:\n\n"
+                        "1) Зайти в чат t.me/DeliciousStarHub.\n\n"
+                        "2) Зайти в тему «Техническая поддержка» и написать сообщение с #спец чат.\n"
+                        "В сообщение должна быть подробная информация о чате, о чем он, и тому подобная информация.\n\n"
+                        "3) Ждать ответ админа/владельца, если чат по описанию подойдет вас попросят дать ссылку на чат в секретном сообщении @PPBBOT, чтобы убедиться, что вся информация правдива.\n"
+                        "Если ваш чат подойдет, вы сможете добавить саппорта себе в чат."
+                    )
+                )
             )
         ]
 
-    await q.answer(results, cache_time=60, is_personal=True)
+    await q.answer(results, cache_time=0, is_personal=True)
 
 
 # ============ ЗАПУСК ============
