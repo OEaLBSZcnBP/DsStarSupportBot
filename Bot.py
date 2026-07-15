@@ -64,7 +64,7 @@ def format_td(td):
     return f"{sec // 2592000} мес"
 
 
-async def get_target(m: types.Message):
+async def get_target(m):
     if m.reply_to_message:
         return m.reply_to_message.from_user
     parts = m.text.split()
@@ -123,7 +123,7 @@ async def ban(m: types.Message):
         return
     target = await get_target(m)
     if not target:
-        return await m.answer("❌ /ban 5 дней @user или реплай")
+        return await m.answer("❌ Укажите: /ban 5 дней @user или реплай")
     parts = m.text.split()
     time_text = None
     for i, p in enumerate(parts[1:]):
@@ -149,7 +149,7 @@ async def ban(m: types.Message):
                     break
         await m.answer(f"🔴 {name} забанен на {period}.\n📝 Причина: {reason}")
     except Exception as e:
-        await m.answer(f"❌ {e}")
+        await m.answer(f"❌ Ошибка: {e}")
 
 
 @dp.message(Command("unban", "анбан"))
@@ -158,7 +158,7 @@ async def unban(m: types.Message):
         return
     target = await get_target(m)
     if not target:
-        return await m.answer("❌ /unban @user")
+        return await m.answer("❌ Укажите: /unban @user")
     try:
         await bot.unban_chat_member(m.chat.id, target.id)
         db.execute("DELETE FROM bans WHERE user_id=? AND chat_id=?", (target.id, m.chat.id))
@@ -166,7 +166,7 @@ async def unban(m: types.Message):
         name = f"@{target.username}" if target.username else target.first_name
         await m.answer(f"✅ {name} разбанен")
     except Exception as e:
-        await m.answer(f"❌ {e}")
+        await m.answer(f"❌ Ошибка: {e}")
 
 
 @dp.message(Command("mute", "мут"))
@@ -175,7 +175,7 @@ async def mute(m: types.Message):
         return
     target = await get_target(m)
     if not target:
-        return await m.answer("❌ /mute 7 дней @user")
+        return await m.answer("❌ Укажите: /mute 7 дней @user")
     parts = m.text.split()
     time_text = None
     for i in range(1, len(parts) - 1):
@@ -200,7 +200,7 @@ async def mute(m: types.Message):
                     break
         await m.answer(f"❗️ {name} лишился права слова на {format_td(td)}.\n📝 Причина: {reason}")
     except Exception as e:
-        await m.answer(f"❌ {e}")
+        await m.answer(f"❌ Ошибка: {e}")
 
 
 @dp.message(Command("unmute", "анмут"))
@@ -209,7 +209,7 @@ async def unmute(m: types.Message):
         return
     target = await get_target(m)
     if not target:
-        return await m.answer("❌ /unmute @user")
+        return await m.answer("❌ Укажите: /unmute @user")
     try:
         await bot.restrict_chat_member(m.chat.id, target.id, types.ChatPermissions(
             can_send_messages=True, can_send_media_messages=True,
@@ -221,7 +221,7 @@ async def unmute(m: types.Message):
         name = f"@{target.username}" if target.username else target.first_name
         await m.answer(f"✅ {name} срок молчания окончен, но лучше следите за языком..")
     except Exception as e:
-        await m.answer(f"❌ {e}")
+        await m.answer(f"❌ Ошибка: {e}")
 
 
 @dp.message(Command("warn", "варн"))
@@ -230,7 +230,7 @@ async def warn(m: types.Message):
         return
     target = await get_target(m)
     if not target:
-        return await m.answer("❌ /warn @user или реплай")
+        return await m.answer("❌ Укажите: /warn @user или реплай")
     cur = db.execute("SELECT count, last_warn FROM warns WHERE user_id=? AND chat_id=?", (target.id, m.chat.id))
     row = cur.fetchone()
     count = (row[0] if row else 0) + 1
@@ -264,7 +264,7 @@ async def takewarn(m: types.Message):
         return
     target = await get_target(m)
     if not target:
-        return await m.answer("❌ /takewarn @user")
+        return await m.answer("❌ Укажите: /takewarn @user")
     cur = db.execute("SELECT count FROM warns WHERE user_id=? AND chat_id=?", (target.id, m.chat.id))
     row = cur.fetchone()
     if not row or row[0] <= 0:
@@ -280,7 +280,7 @@ async def takewarn(m: types.Message):
 async def wwarns(m: types.Message):
     target = await get_target(m)
     if not target:
-        return await m.answer("❌ /wwarns @user")
+        return await m.answer("❌ Укажите: /wwarns @user")
     cur = db.execute("SELECT count, last_warn FROM warns WHERE user_id=? AND chat_id=?", (target.id, m.chat.id))
     row = cur.fetchone()
     name = f"@{target.username}" if target.username else target.first_name
@@ -296,7 +296,7 @@ async def kick(m: types.Message):
         return
     target = await get_target(m)
     if not target:
-        return await m.answer("❌ /kick @user")
+        return await m.answer("❌ Укажите: /kick @user")
     try:
         await bot.ban_chat_member(m.chat.id, target.id, until_date=datetime.now() + timedelta(seconds=30))
         await bot.unban_chat_member(m.chat.id, target.id)
@@ -312,7 +312,7 @@ async def kick(m: types.Message):
                     break
         await m.answer(f"✅ Пользователь {name} исключён.\n📝 Причина: {reason}")
     except Exception as e:
-        await m.answer(f"❌ {e}")
+        await m.answer(f"❌ Ошибка: {e}")
 
 
 @dp.message(Command("report", "репорт"))
@@ -344,14 +344,14 @@ async def report(m: types.Message):
 async def calc(m: types.Message):
     args = m.text.split(maxsplit=1)
     if len(args) < 2:
-        return await m.answer("/calculator 2+2*2")
+        return await m.answer("❌ /calculator 2+2*2")
     expr = args[1].replace(" ", "").replace("×", "*").replace("÷", "/").replace("−", "-").replace(",", ".")
     expr = expr.replace("√(", "math.sqrt(").replace("sqrt(", "math.sqrt(").replace("^", "**").replace("π", "math.pi")
     try:
         res = eval(expr, {"math": math, "__builtins__": {}})
         await m.answer(f"🧮 {args[1]} = {res}")
     except Exception as e:
-        await m.answer(f"❌ {str(e)[:80]}")
+        await m.answer(f"❌ Ошибка: {str(e)[:80]}")
 
 
 @dp.message(Command("meta", "мета"))
@@ -378,7 +378,7 @@ async def offtop(m: types.Message):
 async def search(m: types.Message):
     args = m.text.split(maxsplit=1)
     if len(args) < 2:
-        return await m.answer("/search Запрос")
+        return await m.answer("❌ /search Запрос")
     from urllib.parse import quote
     url = f"https://yandex.ru/search/?text={quote(args[1])}"
     await m.answer(f"🔍 {url}")
@@ -412,7 +412,6 @@ async def inline_handler(q: types.InlineQuery):
     query = q.query.strip().lower()
     results = []
 
-    # ============ "о ботах" ============
     if query in ["о ботах", "about bot", "о ботах.", "о"]:
         results.append(
             InlineQueryResultArticle(
@@ -425,8 +424,7 @@ async def inline_handler(q: types.InlineQuery):
             )
         )
 
-    # ============ "каталог" ============
-    elif query in ["каталог", "catalog", "чаты", "chats"]:
+    if query in ["каталог", "catalog", "чаты", "chats"]:
         results.append(
             InlineQueryResultArticle(
                 id="catalog-1",
@@ -446,8 +444,7 @@ async def inline_handler(q: types.InlineQuery):
             )
         )
 
-    # ============ "сделать свой чат специальным" ============
-    elif query in ["сделать свой чат специальным", "спец чат", "спецчат", "сделать спец", "сделать чат специальным", "специальный чат"]:
+    if query in ["сделать свой чат специальным", "спец чат", "спецчат", "сделать спец", "сделать чат специальным", "специальный чат"]:
         results.append(
             InlineQueryResultArticle(
                 id="specchat-1",
@@ -466,7 +463,6 @@ async def inline_handler(q: types.InlineQuery):
             )
         )
 
-    # Если ничего не нашли — показываем все доступные
     if not results:
         results = [
             InlineQueryResultArticle(
