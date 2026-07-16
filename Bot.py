@@ -561,7 +561,7 @@ async def cmd_callback(c: types.CallbackQuery):
             "📋 Команды звёздного семейства:\n\n"
             "https://telegra.ph/Komandy-zvezdnogo-semejstva-07-15"
         )
-        await c.answer()
+        await c.answer()  # ← этот await должен быть ВНУТРИ elif
 
 
 # ============ ЗАПУСК ============
