@@ -527,9 +527,7 @@ async def inline_handler(iq: types.InlineQuery):
                     "4) Ознакомьтесь с командами."
                 )
             )
-        )
-            
-        ]
+        ))
 
     await q.answer(results, cache_time=0, is_personal=True)
 
