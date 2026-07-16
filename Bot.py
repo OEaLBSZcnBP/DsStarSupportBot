@@ -503,8 +503,40 @@ async def inline_handler(q: types.InlineQuery):
                         "Если ваш чат подойдет, вы сможете добавить саппорта себе в чат."
                     )
                 )
+            ),
+          results = [
+    InlineQueryResultArticle(
+        id="install_bots",
+        title="Установка ботов",
+        description="Установка ботов из звёздного семейства.",
+        input_message_content=InputTextMessageContent(
+            message_text=(
+                "Установка:\n"
+                "1) Выберите бота:\n"
+                "@Star_def_bot.\n"
+                "@AIStar_ai_bot.\n"
+                "@Star_crypto_bot.\n"
+                "@Starbots_payments_bot.\n\n"
+                "2) Зайдите в свой чат и выберите \"Добавить участников\".\n\n"
+                "3) Назначьте нужного бота администратором, выдая все права.\n\n"
+                "4) Ознакомьтесь с командами."
             )
-        ]
+        )
+    ),
+    InlineQueryResultArticle(
+        id="star_commands",
+        title="Команды звездного семейства",
+        description="Все команды звёздного семейства.",
+        input_message_content=InputTextMessageContent(
+            message_text=(
+                "📋 Список команд какого бота вас интересует?\n"
+                "Саппорта: https://telegra.ph/Komandy-StarSupportBot-07-15\n\n"
+                "Звездного семейства: https://telegra.ph/Komandy-zvezdnogo-semejstva-07-15"
+            ),
+            # disable_web_page_preview=True  # Раскомментируйте, если нужно скрыть превью ссылок
+        )
+    )
+        ]  
 
     await q.answer(results, cache_time=0, is_personal=True)
 
