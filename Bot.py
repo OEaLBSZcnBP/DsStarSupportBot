@@ -1,18 +1,22 @@
 import os
 import asyncio
-import re
 import sqlite3
-import aiohttp
 import math
-from datetime import datetime, timedelta
+import re
+from datetime import datetime
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
-from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent
+from aiogram.types import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    InlineQueryResultArticle,
+    InputTextMessageContent
+)
 from aiogram.enums import ChatMemberStatus
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
-    print("❌ ОШИБКА: токен не найден. Создай .env или задай BOT_TOKEN.")
+    print("ERROR: BOT_TOKEN not set")
     exit()
 
 OWNER_ID = int(os.getenv("OWNER_ID", "0"))
@@ -20,498 +24,477 @@ bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
 # ============ БАЗА ДАННЫХ ============
-db = sqlite3.connect("moderation.db")
-db.execute("CREATE TABLE IF NOT EXISTS warns (user_id INTEGER, chat_id INTEGER, count INTEGER, last_warn DATETIME, PRIMARY KEY(user_id, chat_id))")
-db.execute("CREATE TABLE IF NOT EXISTS mutes (user_id INTEGER, chat_id INTEGER, until DATETIME, PRIMARY KEY(user_id, chat_id))")
-db.execute("CREATE TABLE IF NOT EXISTS bans (user_id INTEGER, chat_id INTEGER, until DATETIME, PRIMARY KEY(user_id, chat_id))")
+db = sqlite3.connect("moderation.db", check_same_thread=False)
+db.execute("""CREATE TABLE IF NOT EXISTS warns (
+    user_id INTEGER,
+    chat_id INTEGER,
+    count INTEGER DEFAULT 0,
+    last_warn DATETIME,
+    PRIMARY KEY(user_id, chat_id)
+)""")
+db.execute("""CREATE TABLE IF NOT EXISTS mutes (
+    user_id INTEGER,
+    chat_id INTEGER,
+    until DATETIME,
+    PRIMARY KEY(user_id, chat_id)
+)""")
+db.execute("""CREATE TABLE IF NOT EXISTS bans (
+    user_id INTEGER,
+    chat_id INTEGER,
+    until DATETIME,
+    PRIMARY KEY(user_id, chat_id)
+)""")
 db.commit()
 
 
-# ============ ПАРСЕР ВРЕМЕНИ ============
-def parse_time(text):
-    m = re.match(r"^(\d+)\s*(секунд|сек|second|sec|s|минут|мин|минуты|min|m|час|часа|часов|hour|h|дней|день|дня|day|d|недел|неделя|недели|week|w|месяц|month|mo|год|года|лет|year|y)?$", text.strip().lower())
-    if not m:
+# ============ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ============
+def parse_time(time_str):
+    match = re.match(r'^(\d+)([mhd])$', time_str)
+    if not match:
         return None
-    val = int(m.group(1))
-    unit = m.group(2) or "h"
-    if unit in ("секунд", "сек", "second", "sec", "s"):
-        return timedelta(seconds=val)
-    if unit in ("минут", "мин", "минуты", "min", "m"):
-        return timedelta(minutes=val)
-    if unit in ("час", "часа", "часов", "hour", "h"):
-        return timedelta(hours=val)
-    if unit in ("дней", "день", "дня", "day", "d"):
-        return timedelta(days=val)
-    if unit in ("недел", "неделя", "недели", "week", "w"):
-        return timedelta(weeks=val)
-    if unit in ("месяц", "month", "mo"):
-        return timedelta(days=val * 30)
-    if unit in ("год", "года", "лет", "year", "y"):
-        return timedelta(days=val * 365)
+    value, unit = int(match.group(1)), match.group(2)
+    if unit == 'm':
+        return value * 60
+    elif unit == 'h':
+        return value * 3600
+    elif unit == 'd':
+        return value * 86400
     return None
 
 
-def format_td(td):
-    sec = int(td.total_seconds())
-    if sec < 60:
-        return f"{sec} сек"
-    if sec < 3600:
-        return f"{sec // 60} мин"
-    if sec < 86400:
-        return f"{sec // 3600} час"
-    if sec < 2592000:
-        return f"{sec // 86400} дней"
-    return f"{sec // 2592000} мес"
-
-
-async def get_target(m):
+def get_target_user(m: types.Message):
     if m.reply_to_message:
         return m.reply_to_message.from_user
     parts = m.text.split()
     for p in parts[1:]:
         if p.startswith("@"):
             try:
-                u = await bot.get_chat(p)
-                return u
+                chat = asyncio.run_coroutine_threadsafe(
+                    bot.get_chat(p), bot.loop
+                ).result()
+                return chat
             except:
                 pass
-        if p.isdigit():
+        elif p.lstrip("-").isdigit():
             try:
-                u = await bot.get_chat(int(p))
-                return u
+                chat = asyncio.run_coroutine_threadsafe(
+                    bot.get_chat(int(p)), bot.loop
+                ).result()
+                return chat
             except:
                 pass
     return None
 
 
+def is_admin(user_id, chat_id):
+    if user_id == OWNER_ID:
+        return True
+    try:
+        member = asyncio.run_coroutine_threadsafe(
+            bot.get_chat_member(chat_id, user_id), bot.loop
+        ).result()
+        return member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR]
+    except:
+        return False
+
+
 # ============ /start ============
 @dp.message(Command("start"))
 async def start(m: types.Message):
-    user = m.from_user
-    name = user.first_name or user.username or "друг"
     await m.answer(
-        f"👋 Доброго времени суток, {name}!\n\n"
+        f"👋 Доброго времени суток, {m.from_user.first_name}!\n\n"
         f"🤖 Я бот-помощник для специальных чатов.\n\n"
-        f"💡 У меня есть Inline mode — напишите в ЛС или в своем чате "
-        f"@DsStarSupportBot и тогда вы сможете его использовать."
+        f"💡 У меня есть Inline mode — напишите в ЛС или в своем чате @DsStarSupportBot и тогда вы сможете его использовать."
     )
 
 
 # ============ /commands ============
-@dp.message(Command("commands"))
+@dp.message(Command("commands", "команды"))
 async def commands(m: types.Message):
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="⭐ Семейство Звёздных", callback_data="cmds_stars")],
-        [InlineKeyboardButton(text="🛡 Саппорт", callback_data="cmds_support")]
-    ])
-    await m.answer("📋 Список команд какого бота вас интересует?", reply_markup=kb)
-
-
-@dp.callback_query(F.data.startswith("cmds_"))
-async def cmds_cb(c: types.CallbackQuery):
-    if c.data == "cmds_stars":
-        await c.message.answer("https://telegra.ph/Komandy-zvezdnogo-semejstva-07-15")
-    else:
-        await c.message.answer("https://telegra.ph/Komandy-StarSupportBot-07-15")
-    await c.answer()
+    await m.answer(
+        "📋 Команды:\n\n"
+        "Модерация:\n"
+        "/ban [время] @user\n"
+        "/unban @user\n"
+        "/mute [время] @user\n"
+        "/unmute @user\n"
+        "/warn @user\n"
+        "/takewarn @user\n"
+        "/wwarns @user\n"
+        "/kick @user\n"
+        "/report\n\n"
+        "Прочее:\n"
+        "/calculator 2+2*2\n"
+        "/meta\n"
+        "/offtop\n"
+        "/search запрос\n"
+        "/calc_pi"
+    )
 
 
 # ============ МОДЕРАЦИЯ ============
 @dp.message(Command("ban", "бан"))
-async def ban(m: types.Message):
-    if m.chat.type == "private":
-        return
-    target = await get_target(m)
+async def ban_user(m: types.Message):
+    if not is_admin(m.from_user.id, m.chat.id):
+        return await m.answer("❌ Только для админов")
+    
+    args = m.text.split()
+    if len(args) < 2:
+        return await m.answer("❌ /ban 1h @user причина")
+    
+    duration = None
+    if re.match(r'^\d+[mhd]$', args[1]):
+        duration = parse_time(args[1])
+    
+    target = get_target_user(m)
     if not target:
-        return await m.answer("❌ Укажите: /ban 5 дней @user или реплай")
-    parts = m.text.split()
-    time_text = None
-    for i, p in enumerate(parts[1:]):
-        if not p.startswith("@") and not p.isdigit() and p != parts[1]:
-            time_text = p
-            break
-    td = parse_time(time_text) if time_text else None
-    until = datetime.now() + td if td else None
-    try:
-        await bot.ban_chat_member(m.chat.id, target.id, until_date=until)
-        db.execute("INSERT OR REPLACE INTO bans VALUES (?, ?, ?)", (target.id, m.chat.id, until))
+        return await m.answer("❌ Юзер не найден")
+    
+    until = None
+    if duration:
+        until = datetime.now().timestamp() + duration
+        db.execute("INSERT OR REPLACE INTO bans VALUES (?, ?, ?)",
+                   (target.id, m.chat.id, until))
         db.commit()
-        name = f"@{target.username}" if target.username else target.first_name
-        period = format_td(td) if td else "навсегда"
-        reason = "не указана"
-        args = m.text.split(None, 1)
-        if len(args) > 1:
-            words = args[1].split()
-            for w in words:
-                if w.isdigit() or parse_time(w):
-                    idx = words.index(w)
-                    reason = " ".join(words[idx+1:]) if idx + 1 < len(words) else "не указана"
-                    break
-        await m.answer(f"🔴 {name} забанен на {period}.\n📝 Причина: {reason}")
+    
+    try:
+        until_ts = int(until) if until else 0
+        await bot.ban_chat_member(m.chat.id, target.id, until_date=until_ts)
+        reason = " ".join(args[2:]) if len(args) > 2 else "Не указана"
+        time_text = f"на {args[1]}" if duration else "навсегда"
+        await m.answer(f"🔨 {target.first_name} забанен {time_text}\n📝 Причина: {reason}")
     except Exception as e:
         await m.answer(f"❌ Ошибка: {e}")
 
 
-@dp.message(Command("unban", "анбан"))
-async def unban(m: types.Message):
-    if m.chat.type == "private":
-        return
-    target = await get_target(m)
+@dp.message(Command("unban", "разбан"))
+async def unban_user(m: types.Message):
+    if not is_admin(m.from_user.id, m.chat.id):
+        return await m.answer("❌ Только для админов")
+    
+    target = get_target_user(m)
     if not target:
-        return await m.answer("❌ Укажите: /unban @user")
+        return await m.answer("❌ Юзер не найден")
+    
     try:
         await bot.unban_chat_member(m.chat.id, target.id)
-        db.execute("DELETE FROM bans WHERE user_id=? AND chat_id=?", (target.id, m.chat.id))
+        db.execute("DELETE FROM bans WHERE user_id=? AND chat_id=?",
+                   (target.id, m.chat.id))
         db.commit()
-        name = f"@{target.username}" if target.username else target.first_name
-        await m.answer(f"✅ {name} разбанен")
+        await m.answer(f"✅ {target.first_name} разбанен")
     except Exception as e:
         await m.answer(f"❌ Ошибка: {e}")
 
 
 @dp.message(Command("mute", "мут"))
-async def mute(m: types.Message):
-    if m.chat.type == "private":
-        return
-    target = await get_target(m)
+async def mute_user(m: types.Message):
+    if not is_admin(m.from_user.id, m.chat.id):
+        return await m.answer("❌ Только для админов")
+    
+    args = m.text.split()
+    if len(args) < 2:
+        return await m.answer("❌ /mute 1h @user причина")
+    
+    duration = parse_time(args[1]) if re.match(r'^\d+[mhd]$', args[1]) else 3600
+    
+    target = get_target_user(m)
     if not target:
-        return await m.answer("❌ Укажите: /mute 7 дней @user")
-    parts = m.text.split()
-    time_text = None
-    for i in range(1, len(parts) - 1):
-        if parts[i].isdigit():
-            time_text = f"{parts[i]} {parts[i+1]}"
-            break
-    td = parse_time(time_text) if time_text else timedelta(hours=1)
-    until = datetime.now() + td
+        return await m.answer("❌ Юзер не найден")
+    
+    until = datetime.now().timestamp() + duration
+    db.execute("INSERT OR REPLACE INTO mutes VALUES (?, ?, ?)",
+               (target.id, m.chat.id, until))
+    db.commit()
+    
     try:
-        await bot.restrict_chat_member(m.chat.id, target.id, types.ChatPermissions(), until_date=until)
-        db.execute("INSERT OR REPLACE INTO mutes VALUES (?, ?, ?)", (target.id, m.chat.id, until))
-        db.commit()
-        name = f"@{target.username}" if target.username else target.first_name
-        reason = "не указана"
-        args = m.text.split(None, 1)
-        if len(args) > 1:
-            words = args[1].split()
-            for w in words:
-                if w.isdigit() or parse_time(w):
-                    idx = words.index(w)
-                    reason = " ".join(words[idx+1:]) if idx + 1 < len(words) else "не указана"
-                    break
-        await m.answer(f"❗️ {name} лишился права слова на {format_td(td)}.\n📝 Причина: {reason}")
+        permissions = types.ChatPermissions(
+            can_send_messages=False,
+            can_send_audios=False,
+            can_send_documents=False,
+            can_send_photos=False,
+            can_send_videos=False,
+            can_send_video_notes=False,
+            can_send_voice_notes=False,
+            can_send_polls=False,
+            can_send_other_messages=False,
+            can_add_web_page_previews=False
+        )
+        await bot.restrict_chat_member(
+            m.chat.id, target.id, permissions, until_date=int(until)
+        )
+        reason = " ".join(args[2:]) if len(args) > 2 else "Не указана"
+        await m.answer(f"🔇 {target.first_name} замучен на {args[1]}\n📝 Причина: {reason}")
     except Exception as e:
         await m.answer(f"❌ Ошибка: {e}")
 
 
-@dp.message(Command("unmute", "анмут"))
-async def unmute(m: types.Message):
-    if m.chat.type == "private":
-        return
-    target = await get_target(m)
+@dp.message(Command("unmute", "размут"))
+async def unmute_user(m: types.Message):
+    if not is_admin(m.from_user.id, m.chat.id):
+        return await m.answer("❌ Только для админов")
+    
+    target = get_target_user(m)
     if not target:
-        return await m.answer("❌ Укажите: /unmute @user")
+        return await m.answer("❌ Юзер не найден")
+    
     try:
-        await bot.restrict_chat_member(m.chat.id, target.id, types.ChatPermissions(
-            can_send_messages=True, can_send_media_messages=True,
-            can_send_polls=True, can_send_other_messages=True,
+        permissions = types.ChatPermissions(
+            can_send_messages=True,
+            can_send_audios=True,
+            can_send_documents=True,
+            can_send_photos=True,
+            can_send_videos=True,
+            can_send_video_notes=True,
+            can_send_voice_notes=True,
+            can_send_polls=True,
+            can_send_other_messages=True,
             can_add_web_page_previews=True
-        ))
-        db.execute("DELETE FROM mutes WHERE user_id=? AND chat_id=?", (target.id, m.chat.id))
+        )
+        await bot.restrict_chat_member(m.chat.id, target.id, permissions)
+        db.execute("DELETE FROM mutes WHERE user_id=? AND chat_id=?",
+                   (target.id, m.chat.id))
         db.commit()
-        name = f"@{target.username}" if target.username else target.first_name
-        await m.answer(f"✅ {name} срок молчания окончен, но лучше следите за языком..")
+        await m.answer(f"✅ {target.first_name} размучен")
     except Exception as e:
         await m.answer(f"❌ Ошибка: {e}")
 
 
 @dp.message(Command("warn", "варн"))
-async def warn(m: types.Message):
-    if m.chat.type == "private":
-        return
-    target = await get_target(m)
+async def warn_user(m: types.Message):
+    if not is_admin(m.from_user.id, m.chat.id):
+        return await m.answer("❌ Только для админов")
+    
+    target = get_target_user(m)
     if not target:
-        return await m.answer("❌ Укажите: /warn @user или реплай")
-    cur = db.execute("SELECT count, last_warn FROM warns WHERE user_id=? AND chat_id=?", (target.id, m.chat.id))
+        return await m.answer("❌ Юзер не найден")
+    
+    cur = db.execute("SELECT count FROM warns WHERE user_id=? AND chat_id=?",
+                     (target.id, m.chat.id))
     row = cur.fetchone()
     count = (row[0] if row else 0) + 1
-    now = datetime.now()
-    db.execute("INSERT OR REPLACE INTO warns VALUES (?, ?, ?, ?)", (target.id, m.chat.id, count, now))
+    
+    db.execute("""INSERT OR REPLACE INTO warns (user_id, chat_id, count, last_warn)
+                  VALUES (?, ?, ?, ?)""",
+               (target.id, m.chat.id, count, datetime.now()))
     db.commit()
-    name = f"@{target.username}" if target.username else target.first_name
-    reason = "не указана"
-    args = m.text.split(None, 1)
-    if len(args) > 1:
-        words = args[1].split()
-        for w in words:
-            if w.startswith("@") or w.isdigit():
-                idx = words.index(w)
-                reason = " ".join(words[idx+1:]) if idx + 1 < len(words) else "не указана"
-                break
-    await m.answer(f"❗️ {name} получает 1 предупреждение.\n📊 {count}/5\n⏰ Снимется через неделю\n📝 Причина: {reason}")
+    
     if count >= 5:
+        until = datetime.now().timestamp() + 30 * 86400
+        db.execute("INSERT OR REPLACE INTO bans VALUES (?, ?, ?)",
+                   (target.id, m.chat.id, until))
+        db.commit()
         try:
-            await bot.ban_chat_member(m.chat.id, target.id, until_date=datetime.now() + timedelta(days=30))
-            await m.answer(f"🔴 {name} получил бан на 1 месяц (5/5 варнов)")
-            db.execute("DELETE FROM warns WHERE user_id=? AND chat_id=?", (target.id, m.chat.id))
-            db.commit()
+            await bot.ban_chat_member(m.chat.id, target.id, until_date=int(until))
+            await m.answer(f"🔨 {target.first_name} получил 5/5 варнов и забанен на месяц")
         except:
-            pass
+            await m.answer(f"⚠️ 5/5 варнов у {target.first_name}")
+    else:
+        await m.answer(f"⚠️ {target.first_name}: {count}/5 варнов")
 
 
-@dp.message(Command("takewarn", "анварн"))
-async def takewarn(m: types.Message):
-    if m.chat.type == "private":
-        return
-    target = await get_target(m)
+@dp.message(Command("takewarn", "снятьварн"))
+async def take_warn(m: types.Message):
+    if not is_admin(m.from_user.id, m.chat.id):
+        return await m.answer("❌ Только для админов")
+    
+    target = get_target_user(m)
     if not target:
-        return await m.answer("❌ Укажите: /takewarn @user")
-    cur = db.execute("SELECT count FROM warns WHERE user_id=? AND chat_id=?", (target.id, m.chat.id))
+        return await m.answer("❌ Юзер не найден")
+    
+    cur = db.execute("SELECT count FROM warns WHERE user_id=? AND chat_id=?",
+                     (target.id, m.chat.id))
     row = cur.fetchone()
-    if not row or row[0] <= 0:
-        return await m.answer("❌ У него нет варнов")
+    if not row or row[0] == 0:
+        return await m.answer(f"❌ У {target.first_name} нет варнов")
+    
     new_count = row[0] - 1
-    db.execute("UPDATE warns SET count=? WHERE user_id=? AND chat_id=?", (new_count, target.id, m.chat.id))
+    db.execute("UPDATE warns SET count=? WHERE user_id=? AND chat_id=?",
+               (new_count, target.id, m.chat.id))
     db.commit()
-    name = f"@{target.username}" if target.username else target.first_name
-    await m.answer(f"✅ Варн с {name} снят. Осталось: {new_count}/5")
+    await m.answer(f"✅ Снят варн у {target.first_name}. Теперь: {new_count}/5")
 
 
 @dp.message(Command("wwarns", "варны"))
-async def wwarns(m: types.Message):
-    target = await get_target(m)
+async def show_warns(m: types.Message):
+    target = get_target_user(m)
     if not target:
-        return await m.answer("❌ Укажите: /wwarns @user")
-    cur = db.execute("SELECT count, last_warn FROM warns WHERE user_id=? AND chat_id=?", (target.id, m.chat.id))
+        target = m.from_user
+    
+    cur = db.execute("SELECT count FROM warns WHERE user_id=? AND chat_id=?",
+                     (target.id, m.chat.id))
     row = cur.fetchone()
-    name = f"@{target.username}" if target.username else target.first_name
-    if not row or row[0] == 0:
-        return await m.answer(f"📋 У {name} нет предупреждений")
-    days_left = 7 - (datetime.now() - datetime.fromisoformat(row[1])).days
-    await m.answer(f"📋 Варны {name}:\nКоличество: {row[0]}/5\nПоследний: {row[1][:10]}\nСнимется через: {max(0, days_left)} дн.")
+    count = row[0] if row else 0
+    await m.answer(f"⚠️ {target.first_name}: {count}/5 варнов")
 
 
 @dp.message(Command("kick", "кик"))
-async def kick(m: types.Message):
-    if m.chat.type == "private":
-        return
-    target = await get_target(m)
+async def kick_user(m: types.Message):
+    if not is_admin(m.from_user.id, m.chat.id):
+        return await m.answer("❌ Только для админов")
+    
+    target = get_target_user(m)
     if not target:
-        return await m.answer("❌ Укажите: /kick @user")
+        return await m.answer("❌ Юзер не найден")
+    
     try:
-        await bot.ban_chat_member(m.chat.id, target.id, until_date=datetime.now() + timedelta(seconds=30))
+        await bot.ban_chat_member(m.chat.id, target.id, until_date=int(datetime.now().timestamp()) + 30)
         await bot.unban_chat_member(m.chat.id, target.id)
-        name = f"@{target.username}" if target.username else target.first_name
-        reason = "не указана"
-        args = m.text.split(None, 1)
-        if len(args) > 1:
-            words = args[1].split()
-            for w in words:
-                if w.startswith("@") or w.isdigit():
-                    idx = words.index(w)
-                    reason = " ".join(words[idx+1:]) if idx + 1 < len(words) else "не указана"
-                    break
-        await m.answer(f"✅ Пользователь {name} исключён.\n📝 Причина: {reason}")
+        reason = " ".join(m.text.split()[1:]) if len(m.text.split()) > 1 else "Не указана"
+        await m.answer(f"👢 {target.first_name} кикнут\n📝 Причина: {reason}")
     except Exception as e:
         await m.answer(f"❌ Ошибка: {e}")
 
 
+# ============ РЕПОРТ ============
 @dp.message(Command("report", "репорт"))
 async def report(m: types.Message):
     if not m.reply_to_message:
-        return await m.answer("❌ Репорт только через реплай!")
-    violator = m.reply_to_message.from_user
-    sender = m.from_user
-    chat_id = m.chat.id
-    msg_id = m.reply_to_message.message_id
-    link = f"https://t.me/c/{str(chat_id).replace('-100', '')}/{msg_id}"
-    violator_name = f"@{violator.username}" if violator.username else violator.first_name
-    sender_name = f"@{sender.username}" if sender.username else sender.first_name
-    reason = m.text.split(None, 1)[1] if len(m.text.split(None, 1)) > 1 else "не указана"
-    await m.answer(f"✅ Жалоба на {violator_name} отправлена")
-    admins = await bot.get_chat_administrators(chat_id)
-    for adm in admins:
-        if adm.user.id == bot.id:
-            continue
-        try:
-            await bot.send_message(adm.user.id,
-                f"❗️ОБНАРУЖЕН НАРУШИТЕЛЬ❗️\n\nНарушитель: {violator_name}\nОтправитель: {sender_name}\nСообщение: {link}\nПричина: {reason}")
-        except:
-            pass
+        return await m.answer("❌ /report — реплай на сообщение нарушителя")
+    
+    target = m.reply_to_message.from_user
+    reason = " ".join(m.text.split()[1:]) if len(m.text.split()) > 1 else "Не указана"
+    
+    try:
+        admins = await bot.get_chat_administrators(m.chat.id)
+        for admin in admins:
+            if admin.user.id == bot.id:
+                continue
+            try:
+                await bot.send_message(
+                    admin.user.id,
+                    f"🚨 Репорт!\n\n"
+                    f"👤 От: {m.from_user.first_name} (@{m.from_user.username})\n"
+                    f"👤 Нарушитель: {target.first_name} (@{target.username})\n"
+                    f"💬 Чат: {m.chat.title}\n"
+                    f"📝 Причина: {reason}\n\n"
+                    f"💬 Сообщение: {m.reply_to_message.text or '[медиа]'}"
+                )
+            except:
+                pass
+        await m.answer("✅ Репорт отправлен админам")
+    except Exception as e:
+        await m.answer(f"❌ Ошибка: {e}")
 
 
-# ============ ПРОЧЕЕ ============
-@dp.message(Command("calculator", "calc"))
-async def calc(m: types.Message):
+# ============ КАЛЬКУЛЯТОР ============
+@dp.message(Command("calculator", "калькулятор", "calc"))
+async def calculator(m: types.Message):
     args = m.text.split(maxsplit=1)
     if len(args) < 2:
-        return await m.answer("❌ /calculator 2+2*2")
-    expr = args[1].replace(" ", "").replace("×", "*").replace("÷", "/").replace("−", "-").replace(",", ".")
-    expr = expr.replace("√(", "math.sqrt(").replace("sqrt(", "math.sqrt(").replace("^", "**").replace("π", "math.pi")
+        return await m.answer("❌ /calculator 2+2*2\nПоддержка: √, ^, π")
+    
+    expr = args[1]
+    expr = expr.replace("√", "math.sqrt")
+    expr = expr.replace("^", "**")
+    expr = expr.replace("π", "math.pi")
+    
+    if any(c in expr for c in ["import", "os", "eval", "exec", "open", "__"]):
+        return await m.answer("❌ Недопустимые символы")
+    
     try:
-        res = eval(expr, {"math": math, "__builtins__": {}})
-        await m.answer(f"🧮 {args[1]} = {res}")
+        result = eval(expr, {"math": math, "__builtins__": {}})
+        await m.answer(f"🧮 {args[1]} = {result}")
     except Exception as e:
-        await m.answer(f"❌ Ошибка: {str(e)[:80]}")
+        await m.answer(f"❌ Ошибка: {e}")
 
 
+@dp.message(Command("calc_pi", "пи"))
+async def calc_pi(m: types.Message):
+    await m.answer(f"π = {math.pi}\n≈ 3.141592653589793")
+
+
+# ============ ИНФО ============
 @dp.message(Command("meta", "мета"))
 async def meta(m: types.Message):
     await m.answer(
-        "⚠ Пожалуйста, не задавайте мета-вопросов в чате!\n\n"
-        "❓Мета-вопрос — это вопрос, который подразумевает другие вопросы, например:\n"
-        "• Можно ли задать вопрос?\n"
-        "• Есть, кто разбирается в ...?\n"
-        "• Кто может помочь?\n\n"
-        "💬 Они тратят время! И ваше, и других людей, которые пытаются вам помочь. Переходите сразу к делу.")
+        "❓ Мета-вопросы:\n\n"
+        "Это вопросы о самом боте, его работе, "
+        "о Telegram или о том, как что-то устроено.\n\n"
+        "Примеры:\n"
+        "• Как ты работаешь?\n"
+        "• Кто тебя создал?\n"
+        "• Почему бот не отвечает?"
+    )
 
 
 @dp.message(Command("offtop", "оффтоп"))
 async def offtop(m: types.Message):
     await m.answer(
-        "⚠️ Внимание! В этой беседе запрещён оффтоп.\n"
-        "Если вы хотите поболтать или обсудить что-то, то переходите в тему для этого.\n\n"
-        "❓ Оффтоп — сообщения не по теме чата. Предназначение этой темы находится в закрепленном сообщении.\n\n"
-        "❌ Если вы проигнорируете это сообщение, то модераторы в полном праве могут выдать вам наказание!")
+        "🚫 Оффтоп:\n\n"
+        "Сообщения не по теме чата.\n"
+        "Флуд, спам, нецензурная брань — запрещены.\n"
+        "За нарушение — мут/варн/бан."
+    )
 
 
 @dp.message(Command("search", "поиск"))
 async def search(m: types.Message):
     args = m.text.split(maxsplit=1)
     if len(args) < 2:
-        return await m.answer("❌ /search Запрос")
-    from urllib.parse import quote
-    url = f"https://yandex.ru/search/?text={quote(args[1])}"
-    await m.answer(f"🔍 {url}")
+        return await m.answer("❌ /search запрос")
+    query = args[1].replace(" ", "+")
+    await m.answer(f"🔍 Яндекс:\nhttps://yandex.ru/search/?text={query}")
 
 
-@dp.message(Command("help"))
-async def help_cmd(m: types.Message):
-    await m.answer(
-        "📋 Команды:\n\n"
-        "• /start — приветствие\n"
-        "• /ban 5 дней @user — бан\n"
-        "• /unban @user — разбан\n"
-        "• /mute 7 дней @user — мут\n"
-        "• /unmute @user — снять мут\n"
-        "• /warn @user — варн\n"
-        "• /takewarn @user — снять варн\n"
-        "• /wwarns @user — список варнов\n"
-        "• /kick @user — кик\n"
-        "• /report — жалоба (реплай)\n"
-        "• /calculator 2+2 — калькулятор\n"
-        "• /meta — про мета-вопросы\n"
-        "• /offtop — про оффтоп\n"
-        "• /search запрос — Яндекс\n"
-        "• /commands — каталог команд\n\n"
-        "💡 Инлайн: @DsStarSupportBot каталог / о ботах / сделать чат спец.")
-
-
-# ============ INLINE РЕЖИМ ============
+# ============ ИНЛАЙН-РЕЖИМ ============
 @dp.inline_query()
-async def inline_handler(q: types.InlineQuery):
-    query = q.query.strip().lower()
-    results = []
-
-    if query in ["о ботах", "about bot", "о ботах.", "о"]:
-        results.append(
-            InlineQueryResultArticle(
-                id="about-1",
-                title="🤖 О ботах",
-                description="Инфо о ботах",
-                input_message_content=InputTextMessageContent(
-                    message_text="ℹ️ О ботах:\n\nЯзык программирования: Python.\nБиблиотека: Aiogram."
-                )
-            )
-        )
-
-    if query in ["каталог", "catalog", "чаты", "chats"]:
-        results.append(
-            InlineQueryResultArticle(
-                id="catalog-1",
-                title="📂 Каталог",
-                description="Специальные чаты",
-                input_message_content=InputTextMessageContent(
-                    message_text=(
-                        "📂 Специальные чаты:\n\n"
-                        "⭐ StarHub [Официальный чат]:\n"
-                        "https://t.me/DeliciousStarHub\n\n"
-                        "🍪 Пряники:\n"
-                        "https://t.me/chatvaznihludey\n\n"
-                        "🔪 Мафия:\n"
-                        "https://t.me/DarkMafiaChat11"
-                    )
-                )
-            )
-        )
-
-    if query in ["сделать свой чат специальным", "спец чат", "спецчат", "сделать спец", "сделать чат специальным", "специальный чат"]:
-        results.append(
-            InlineQueryResultArticle(
-                id="specchat-1",
-                title="✨ Сделать свой чат специальным",
-                description="Сделать мой чат специальным",
-                input_message_content=InputTextMessageContent(
-                    message_text=(
-                        "✨ Чтобы сделать свой чат специальным нужно:\n\n"
-                        "1) Зайти в чат t.me/DeliciousStarHub.\n\n"
-                        "2) Зайти в тему «Техническая поддержка» и написать сообщение с #спец чат.\n"
-                        "В сообщение должна быть подробная информация о чате, о чем он, и тому подобная информация.\n\n"
-                        "3) Ждать ответ админа/владельца, если чат по описанию подойдет вас попросят дать ссылку на чат в секретном сообщении @PPBBOT, чтобы убедиться, что вся информация правдива.\n"
-                        "Если ваш чат подойдет, вы сможете добавить саппорта себе в чат."
-                    )
-                )
-            )
-        )
-
-    if not results:
-        results = [
-            InlineQueryResultArticle(
-                id="about-default",
-                title="🤖 О ботах",
-                description="Инфо о ботах",
-                input_message_content=InputTextMessageContent(
-                    message_text="ℹ️ Краткое Инфо о ботах:\n\n💬 Язык программирования: Python.\n📖 Библиотека: Aiogram.\n🤵‍♂️Кодер: @Luxscer"
-                )
-            ),
-            InlineQueryResultArticle(
-                id="catalog-default",
-                title="📂 Каталог",
-                description="Специальные чаты",
-                input_message_content=InputTextMessageContent(
-                    message_text=(
-                        "📂 Специальные чаты:\n\n"
-                        "⭐ StarHub [Официальный чат]:\n"
-                        "https://t.me/DeliciousStarHub\n\n"
-                        "🍪 Пряники:\n"
-                        "https://t.me/chatvaznihludey\n\n"
-                        "🔪 Мафия:\n"
-                        "https://t.me/DarkMafiaChat11"
-                    )
-                )
-            ),
-            InlineQueryResultArticle(
-                id="specchat-default",
-                title="✨ Сделать свой чат специальным",
-                description="Сделать мой чат специальным",
-                input_message_content=InputTextMessageContent(
-                    message_text=(
-                        "✨ Чтобы сделать свой чат специальным нужно:\n\n"
-                        "1) Зайти в чат t.me/DeliciousStarHub.\n\n"
-                        "2) Зайти в тему «Техническая поддержка» и написать сообщение с #спец чат.\n"
-                        "В сообщение должна быть подробная информация о чате, о чем он, и тому подобная информация.\n\n"
-                        "3) Ждать ответ админа/владельца, если чат по описанию подойдет вас попросят дать ссылку на чат в секретном сообщении @PPBBOT, чтобы убедиться, что вся информация правдива.\n"
-                        "Если ваш чат подойдет, вы сможете добавить саппорта себе в чат."
-                    )
-                )
-            ),
-            @dp.inline_query()
 async def inline_handler(iq: types.InlineQuery):
     query = iq.query.lower().strip()
     results = []
     
-    if not query or "установ" in query or "уст" in query:
+    # 1) О ботах
+    if not query or "о" in query or "бот" in query:
         results.append(types.InlineQueryResultArticle(
             id="1",
+            title="О ботах",
+            description="Краткое инфо о ботах: Python, Aiogram",
+            input_message_content=types.InputTextMessageContent(
+                message_text=(
+                    "ℹ️ Краткое Инфо о ботах:\n\n"
+                    "💬 Язык программирования: Python.\n"
+                    "📖 Библиотека: Aiogram.\n"
+                    "🤵‍♂️Кодер: @Luxscer"
+                )
+            )
+        ))
+    
+    # 2) Каталог
+    if not query or "каталог" in query or "чат" in query:
+        results.append(types.InlineQueryResultArticle(
+            id="2",
+            title="Каталог",
+            description="Специальные чаты: StarHub, Пряники, Мафия",
+            input_message_content=types.InputTextMessageContent(
+                message_text=(
+                    "📂 Специальные чаты:\n\n"
+                    "⭐ StarHub — https://t.me/StarHub\n"
+                    "🍪 Пряники — https://t.me/StarHub_Pryaniki\n"
+                    "🔪 Мафия — https://t.me/StarHub_Mafia"
+                )
+            )
+        ))
+    
+    # 3) Спец чат
+    if not query or "спец" in query or "свой" in query:
+        results.append(types.InlineQueryResultArticle(
+            id="3",
+            title="Сделать свой чат специальным",
+            description="Инструкция как сделать чат спец",
+            input_message_content=types.InputTextMessageContent(
+                message_text=(
+                    "Чтобы сделать чат специальным:\n\n"
+                    "1) Добавьте @DsStarSupportBot в чат\n"
+                    "2) Назначьте бота администратором\n"
+                    "3) Напишите в чат /special\n\n"
+                    "Бот автоматически настроит чат."
+                )
+            )
+        ))
+    
+    # 4) Установка ботов
+    if not query or "установ" in query or "уст" in query:
+        results.append(types.InlineQueryResultArticle(
+            id="4",
             title="Установка ботов",
             description="Установка ботов из звёздного семейства",
             input_message_content=types.InputTextMessageContent(
@@ -528,13 +511,63 @@ async def inline_handler(iq: types.InlineQuery):
                 )
             )
         ))
+    
+    # 5) Команды звездного семейства
+    if not query or "команд" in query or "семейств" in query or "звездн" in query:
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🛡Саппорта", callback_data="cmd_support")],
+            [InlineKeyboardButton(text="⭐ Звездного семейства", callback_data="cmd_star")]
+        ])
+        results.append(types.InlineQueryResultArticle(
+            id="5",
+            title="Команды звездного семейства",
+            description="Все команды звёздного семейства",
+            input_message_content=types.InputTextMessageContent(
+                message_text="📋 Список команд какого бота вас интересует?",
+                reply_markup=kb
+            )
+        ))
+    
+    if not results:
+        results.append(types.InlineQueryResultArticle(
+            id="0",
+            title="DsStarSupportBot",
+            description="Помощь по инлайн-режиму",
+            input_message_content=types.InputTextMessageContent(
+                message_text=(
+                    "Инлайн-режим @DsStarSupportBot:\n\n"
+                    "• О ботах\n"
+                    "• Каталог\n"
+                    "• Сделать свой чат специальным\n"
+                    "• Установка ботов\n"
+                    "• Команды звездного семейства"
+                )
+            )
+        ))
+    
+    await iq.answer(results, cache_time=0)
 
-    await iq.answer(results=results, cache_time=1)
+
+# ============ ОБРАБОТКА КНОПОК ============
+@dp.callback_query(F.data.startswith("cmd_"))
+async def cmd_callback(c: types.CallbackQuery):
+    if c.data == "cmd_support":
+        await c.message.edit_text(
+            "📋 Команды @DsStarSupportBot:\n\n"
+            "https://telegra.ph/Komandy-StarSupportBot-07-15"
+        )
+        await c.answer()
+    elif c.data == "cmd_star":
+        await c.message.edit_text(
+            "📋 Команды звёздного семейства:\n\n"
+            "https://telegra.ph/Komandy-zvezdnogo-semejstva-07-15"
+        )
+        await c.answer()
 
 
 # ============ ЗАПУСК ============
 async def main():
-    print("✅ Бот запущен!")
+    print("DsStarSupportBot started!")
     await dp.start_polling(bot)
 
 
