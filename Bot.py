@@ -49,7 +49,6 @@ db.commit()
 
 # ============ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ============
 def parse_time(time_str):
-    """Парсит время: 1h, 30m, 1d"""
     match = re.match(r'^(\d+)([mhd])$', time_str)
     if not match:
         return None
@@ -64,7 +63,6 @@ def parse_time(time_str):
 
 
 def get_target_user(m: types.Message):
-    """Получает юзера из команды (реплай/@username/ID)"""
     if m.reply_to_message:
         return m.reply_to_message.from_user
     parts = m.text.split()
@@ -103,27 +101,16 @@ def is_admin(user_id, chat_id):
 # ============ /start ============
 @dp.message(Command("start"))
 async def start(m: types.Message):
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🛡 Семейство звёздных", url="https://t.me/StarHub"),
-         InlineKeyboardButton(text="📞 Саппорт", url="https://t.me/DsStarSupport")]
-    ])
     await m.answer(
-        f"👋 Привет, {m.from_user.first_name}!\n\n"
-        f"Я — DsStarSupportBot.\n"
-        f"Помогаю в специальных чатах.\n\n"
-        f"Команды: /commands\n"
-        f"Инлайн: напиши @DsStarSupportBot в любом чате",
-        reply_markup=kb
+        f"👋 Доброго времени суток, {m.from_user.first_name}!\n\n"
+        f"🤖 Я бот-помощник для специальных чатов.\n\n"
+        f"💡 У меня есть Inline mode — напишите в ЛС или в своем чате @DsStarSupportBot и тогда вы сможете его использовать."
     )
 
 
 # ============ /commands ============
 @dp.message(Command("commands", "команды"))
 async def commands(m: types.Message):
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🤖 Семейство звёздных", url="https://t.me/StarHub"),
-         InlineKeyboardButton(text="📞 Саппорт", url="https://t.me/DsStarSupport")]
-    ])
     await m.answer(
         "📋 Команды:\n\n"
         "Модерация:\n"
@@ -141,8 +128,7 @@ async def commands(m: types.Message):
         "/meta\n"
         "/offtop\n"
         "/search запрос\n"
-        "/calc_pi",
-        reply_markup=kb
+        "/calc_pi"
     )
 
 
@@ -293,7 +279,6 @@ async def warn_user(m: types.Message):
     db.commit()
     
     if count >= 5:
-        # Автобан на месяц
         until = datetime.now().timestamp() + 30 * 86400
         db.execute("INSERT OR REPLACE INTO bans VALUES (?, ?, ?)",
                    (target.id, m.chat.id, until))
@@ -361,8 +346,6 @@ async def kick_user(m: types.Message):
 
 
 # ============ РЕПОРТ ============
-report_pending = {}
-
 @dp.message(Command("report", "репорт"))
 async def report(m: types.Message):
     if not m.reply_to_message:
@@ -371,7 +354,6 @@ async def report(m: types.Message):
     target = m.reply_to_message.from_user
     reason = " ".join(m.text.split()[1:]) if len(m.text.split()) > 1 else "Не указана"
     
-    # Ищем админов чата
     try:
         admins = await bot.get_chat_administrators(m.chat.id)
         for admin in admins:
@@ -402,12 +384,10 @@ async def calculator(m: types.Message):
         return await m.answer("❌ /calculator 2+2*2\nПоддержка: √, ^, π")
     
     expr = args[1]
-    # Замены
     expr = expr.replace("√", "math.sqrt")
     expr = expr.replace("^", "**")
     expr = expr.replace("π", "math.pi")
     
-    # Очистка от опасных символов
     if any(c in expr for c in ["import", "os", "eval", "exec", "open", "__"]):
         return await m.answer("❌ Недопустимые символы")
     
@@ -581,7 +561,7 @@ async def cmd_callback(c: types.CallbackQuery):
             "📋 Команды звёздного семейства:\n\n"
             "https://telegra.ph/Komandy-zvezdnogo-semejstva-07-15"
         )
-await q.answer(results, cache_time=0, is_personal=True)
+        await c.answer()
 
 
 # ============ ЗАПУСК ============
