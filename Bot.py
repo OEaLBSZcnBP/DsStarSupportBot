@@ -581,7 +581,7 @@ async def cmd_callback(c: types.CallbackQuery):
             "📋 Команды звёздного семейства:\n\n"
             "https://telegra.ph/Komandy-zvezdnogo-semejstva-07-15"
         )
-        await c.answer()
+await q.answer(results, cache_time=0, is_personal=True)
 
 
 # ============ ЗАПУСК ============
