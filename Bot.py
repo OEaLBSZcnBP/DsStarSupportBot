@@ -23,31 +23,13 @@ OWNER_ID = int(os.getenv("OWNER_ID", "0"))
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# ============ БАЗА ДАННЫХ ============
 db = sqlite3.connect("moderation.db", check_same_thread=False)
-db.execute("""CREATE TABLE IF NOT EXISTS warns (
-    user_id INTEGER,
-    chat_id INTEGER,
-    count INTEGER DEFAULT 0,
-    last_warn DATETIME,
-    PRIMARY KEY(user_id, chat_id)
-)""")
-db.execute("""CREATE TABLE IF NOT EXISTS mutes (
-    user_id INTEGER,
-    chat_id INTEGER,
-    until DATETIME,
-    PRIMARY KEY(user_id, chat_id)
-)""")
-db.execute("""CREATE TABLE IF NOT EXISTS bans (
-    user_id INTEGER,
-    chat_id INTEGER,
-    until DATETIME,
-    PRIMARY KEY(user_id, chat_id)
-)""")
+db.execute("CREATE TABLE IF NOT EXISTS warns (user_id INTEGER, chat_id INTEGER, count INTEGER DEFAULT 0, last_warn DATETIME, PRIMARY KEY(user_id, chat_id))")
+db.execute("CREATE TABLE IF NOT EXISTS mutes (user_id INTEGER, chat_id INTEGER, until DATETIME, PRIMARY KEY(user_id, chat_id))")
+db.execute("CREATE TABLE IF NOT EXISTS bans (user_id INTEGER, chat_id INTEGER, until DATETIME, PRIMARY KEY(user_id, chat_id))")
 db.commit()
 
 
-# ============ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ============
 def parse_time(time_str):
     match = re.match(r'^(\d+)([mhd])$', time_str)
     if not match:
@@ -69,17 +51,13 @@ def get_target_user(m: types.Message):
     for p in parts[1:]:
         if p.startswith("@"):
             try:
-                chat = asyncio.run_coroutine_threadsafe(
-                    bot.get_chat(p), bot.loop
-                ).result()
+                chat = asyncio.run_coroutine_threadsafe(bot.get_chat(p), bot.loop).result()
                 return chat
             except:
                 pass
         elif p.lstrip("-").isdigit():
             try:
-                chat = asyncio.run_coroutine_threadsafe(
-                    bot.get_chat(int(p)), bot.loop
-                ).result()
+                chat = asyncio.run_coroutine_threadsafe(bot.get_chat(int(p)), bot.loop).result()
                 return chat
             except:
                 pass
@@ -90,15 +68,12 @@ def is_admin(user_id, chat_id):
     if user_id == OWNER_ID:
         return True
     try:
-        member = asyncio.run_coroutine_threadsafe(
-            bot.get_chat_member(chat_id, user_id), bot.loop
-        ).result()
+        member = asyncio.run_coroutine_threadsafe(bot.get_chat_member(chat_id, user_id), bot.loop).result()
         return member.status in [ChatMemberStatus.ADMINISTRATOR, ChatMemberStatus.CREATOR]
     except:
         return False
 
 
-# ============ /start ============
 @dp.message(Command("start"))
 async def start(m: types.Message):
     await m.answer(
@@ -108,7 +83,6 @@ async def start(m: types.Message):
     )
 
 
-# ============ /commands ============
 @dp.message(Command("commands", "команды"))
 async def commands(m: types.Message):
     await m.answer(
@@ -132,31 +106,24 @@ async def commands(m: types.Message):
     )
 
 
-# ============ МОДЕРАЦИЯ ============
 @dp.message(Command("ban", "бан"))
 async def ban_user(m: types.Message):
     if not is_admin(m.from_user.id, m.chat.id):
         return await m.answer("❌ Только для админов")
-    
     args = m.text.split()
     if len(args) < 2:
         return await m.answer("❌ /ban 1h @user причина")
-    
     duration = None
     if re.match(r'^\d+[mhd]$', args[1]):
         duration = parse_time(args[1])
-    
     target = get_target_user(m)
     if not target:
         return await m.answer("❌ Юзер не найден")
-    
     until = None
     if duration:
         until = datetime.now().timestamp() + duration
-        db.execute("INSERT OR REPLACE INTO bans VALUES (?, ?, ?)",
-                   (target.id, m.chat.id, until))
+        db.execute("INSERT OR REPLACE INTO bans VALUES (?, ?, ?)", (target.id, m.chat.id, until))
         db.commit()
-    
     try:
         until_ts = int(until) if until else 0
         await bot.ban_chat_member(m.chat.id, target.id, until_date=until_ts)
@@ -171,15 +138,12 @@ async def ban_user(m: types.Message):
 async def unban_user(m: types.Message):
     if not is_admin(m.from_user.id, m.chat.id):
         return await m.answer("❌ Только для админов")
-    
     target = get_target_user(m)
     if not target:
         return await m.answer("❌ Юзер не найден")
-    
     try:
         await bot.unban_chat_member(m.chat.id, target.id)
-        db.execute("DELETE FROM bans WHERE user_id=? AND chat_id=?",
-                   (target.id, m.chat.id))
+        db.execute("DELETE FROM bans WHERE user_id=? AND chat_id=?", (target.id, m.chat.id))
         db.commit()
         await m.answer(f"✅ {target.first_name} разбанен")
     except Exception as e:
@@ -190,22 +154,16 @@ async def unban_user(m: types.Message):
 async def mute_user(m: types.Message):
     if not is_admin(m.from_user.id, m.chat.id):
         return await m.answer("❌ Только для админов")
-    
     args = m.text.split()
     if len(args) < 2:
         return await m.answer("❌ /mute 1h @user причина")
-    
     duration = parse_time(args[1]) if re.match(r'^\d+[mhd]$', args[1]) else 3600
-    
     target = get_target_user(m)
     if not target:
         return await m.answer("❌ Юзер не найден")
-    
     until = datetime.now().timestamp() + duration
-    db.execute("INSERT OR REPLACE INTO mutes VALUES (?, ?, ?)",
-               (target.id, m.chat.id, until))
+    db.execute("INSERT OR REPLACE INTO mutes VALUES (?, ?, ?)", (target.id, m.chat.id, until))
     db.commit()
-    
     try:
         permissions = types.ChatPermissions(
             can_send_messages=False,
@@ -219,9 +177,7 @@ async def mute_user(m: types.Message):
             can_send_other_messages=False,
             can_add_web_page_previews=False
         )
-        await bot.restrict_chat_member(
-            m.chat.id, target.id, permissions, until_date=int(until)
-        )
+        await bot.restrict_chat_member(m.chat.id, target.id, permissions, until_date=int(until))
         reason = " ".join(args[2:]) if len(args) > 2 else "Не указана"
         await m.answer(f"🔇 {target.first_name} замучен на {args[1]}\n📝 Причина: {reason}")
     except Exception as e:
@@ -232,11 +188,9 @@ async def mute_user(m: types.Message):
 async def unmute_user(m: types.Message):
     if not is_admin(m.from_user.id, m.chat.id):
         return await m.answer("❌ Только для админов")
-    
     target = get_target_user(m)
     if not target:
         return await m.answer("❌ Юзер не найден")
-    
     try:
         permissions = types.ChatPermissions(
             can_send_messages=True,
@@ -251,8 +205,7 @@ async def unmute_user(m: types.Message):
             can_add_web_page_previews=True
         )
         await bot.restrict_chat_member(m.chat.id, target.id, permissions)
-        db.execute("DELETE FROM mutes WHERE user_id=? AND chat_id=?",
-                   (target.id, m.chat.id))
+        db.execute("DELETE FROM mutes WHERE user_id=? AND chat_id=?", (target.id, m.chat.id))
         db.commit()
         await m.answer(f"✅ {target.first_name} размучен")
     except Exception as e:
@@ -263,25 +216,17 @@ async def unmute_user(m: types.Message):
 async def warn_user(m: types.Message):
     if not is_admin(m.from_user.id, m.chat.id):
         return await m.answer("❌ Только для админов")
-    
     target = get_target_user(m)
     if not target:
         return await m.answer("❌ Юзер не найден")
-    
-    cur = db.execute("SELECT count FROM warns WHERE user_id=? AND chat_id=?",
-                     (target.id, m.chat.id))
+    cur = db.execute("SELECT count FROM warns WHERE user_id=? AND chat_id=?", (target.id, m.chat.id))
     row = cur.fetchone()
     count = (row[0] if row else 0) + 1
-    
-    db.execute("""INSERT OR REPLACE INTO warns (user_id, chat_id, count, last_warn)
-                  VALUES (?, ?, ?, ?)""",
-               (target.id, m.chat.id, count, datetime.now()))
+    db.execute("INSERT OR REPLACE INTO warns (user_id, chat_id, count, last_warn) VALUES (?, ?, ?, ?)", (target.id, m.chat.id, count, datetime.now()))
     db.commit()
-    
     if count >= 5:
         until = datetime.now().timestamp() + 30 * 86400
-        db.execute("INSERT OR REPLACE INTO bans VALUES (?, ?, ?)",
-                   (target.id, m.chat.id, until))
+        db.execute("INSERT OR REPLACE INTO bans VALUES (?, ?, ?)", (target.id, m.chat.id, until))
         db.commit()
         try:
             await bot.ban_chat_member(m.chat.id, target.id, until_date=int(until))
@@ -296,20 +241,15 @@ async def warn_user(m: types.Message):
 async def take_warn(m: types.Message):
     if not is_admin(m.from_user.id, m.chat.id):
         return await m.answer("❌ Только для админов")
-    
     target = get_target_user(m)
     if not target:
         return await m.answer("❌ Юзер не найден")
-    
-    cur = db.execute("SELECT count FROM warns WHERE user_id=? AND chat_id=?",
-                     (target.id, m.chat.id))
+    cur = db.execute("SELECT count FROM warns WHERE user_id=? AND chat_id=?", (target.id, m.chat.id))
     row = cur.fetchone()
     if not row or row[0] == 0:
         return await m.answer(f"❌ У {target.first_name} нет варнов")
-    
     new_count = row[0] - 1
-    db.execute("UPDATE warns SET count=? WHERE user_id=? AND chat_id=?",
-               (new_count, target.id, m.chat.id))
+    db.execute("UPDATE warns SET count=? WHERE user_id=? AND chat_id=?", (new_count, target.id, m.chat.id))
     db.commit()
     await m.answer(f"✅ Снят варн у {target.first_name}. Теперь: {new_count}/5")
 
@@ -319,9 +259,7 @@ async def show_warns(m: types.Message):
     target = get_target_user(m)
     if not target:
         target = m.from_user
-    
-    cur = db.execute("SELECT count FROM warns WHERE user_id=? AND chat_id=?",
-                     (target.id, m.chat.id))
+    cur = db.execute("SELECT count FROM warns WHERE user_id=? AND chat_id=?", (target.id, m.chat.id))
     row = cur.fetchone()
     count = row[0] if row else 0
     await m.answer(f"⚠️ {target.first_name}: {count}/5 варнов")
@@ -331,11 +269,9 @@ async def show_warns(m: types.Message):
 async def kick_user(m: types.Message):
     if not is_admin(m.from_user.id, m.chat.id):
         return await m.answer("❌ Только для админов")
-    
     target = get_target_user(m)
     if not target:
         return await m.answer("❌ Юзер не найден")
-    
     try:
         await bot.ban_chat_member(m.chat.id, target.id, until_date=int(datetime.now().timestamp()) + 30)
         await bot.unban_chat_member(m.chat.id, target.id)
@@ -345,15 +281,12 @@ async def kick_user(m: types.Message):
         await m.answer(f"❌ Ошибка: {e}")
 
 
-# ============ РЕПОРТ ============
 @dp.message(Command("report", "репорт"))
 async def report(m: types.Message):
     if not m.reply_to_message:
         return await m.answer("❌ /report — реплай на сообщение нарушителя")
-    
     target = m.reply_to_message.from_user
     reason = " ".join(m.text.split()[1:]) if len(m.text.split()) > 1 else "Не указана"
-    
     try:
         admins = await bot.get_chat_administrators(m.chat.id)
         for admin in admins:
@@ -376,21 +309,17 @@ async def report(m: types.Message):
         await m.answer(f"❌ Ошибка: {e}")
 
 
-# ============ КАЛЬКУЛЯТОР ============
 @dp.message(Command("calculator", "калькулятор", "calc"))
 async def calculator(m: types.Message):
     args = m.text.split(maxsplit=1)
     if len(args) < 2:
         return await m.answer("❌ /calculator 2+2*2\nПоддержка: √, ^, π")
-    
     expr = args[1]
     expr = expr.replace("√", "math.sqrt")
     expr = expr.replace("^", "**")
     expr = expr.replace("π", "math.pi")
-    
     if any(c in expr for c in ["import", "os", "eval", "exec", "open", "__"]):
         return await m.answer("❌ Недопустимые символы")
-    
     try:
         result = eval(expr, {"math": math, "__builtins__": {}})
         await m.answer(f"🧮 {args[1]} = {result}")
@@ -403,7 +332,6 @@ async def calc_pi(m: types.Message):
     await m.answer(f"π = {math.pi}\n≈ 3.141592653589793")
 
 
-# ============ ИНФО ============
 @dp.message(Command("meta", "мета"))
 async def meta(m: types.Message):
     await m.answer(
@@ -436,7 +364,6 @@ async def search(m: types.Message):
     await m.answer(f"🔍 Яндекс:\nhttps://yandex.ru/search/?text={query}")
 
 
-# ============ ИНЛАЙН-РЕЖИМ ============
 @dp.inline_query()
 async def inline_handler(iq: types.InlineQuery):
     query = iq.query.lower().strip()
@@ -548,7 +475,6 @@ async def inline_handler(iq: types.InlineQuery):
     await iq.answer(results, cache_time=0)
 
 
-# ============ ОБРАБОТКА КНОПОК ============
 @dp.callback_query(F.data.startswith("cmd_"))
 async def cmd_callback(c: types.CallbackQuery):
     if c.data == "cmd_support":
@@ -565,7 +491,6 @@ async def cmd_callback(c: types.CallbackQuery):
         await c.answer()
 
 
-# ============ ЗАПУСК ============
 async def main():
     print("DsStarSupportBot started!")
     await dp.start_polling(bot)
