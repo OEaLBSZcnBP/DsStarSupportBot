@@ -470,7 +470,7 @@ async def inline_handler(q: types.InlineQuery):
                 title="🤖 О ботах",
                 description="Инфо о ботах",
                 input_message_content=InputTextMessageContent(
-                    message_text="ℹ️ О ботах:\n\nЯзык программирования: Python.\nБиблиотека: Aiogram."
+                    message_text="ℹ️ О ботах:\n\nЯзык программирования: Python.\nБиблиотека: Aiogram./nКодер:@Luxscer"
                 )
             ),
             InlineQueryResultArticle(
