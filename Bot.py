@@ -529,7 +529,7 @@ async def inline_handler(iq: types.InlineQuery):
             )
         ))
 
-    await q.answer(results, cache_time=0, is_personal=True)
+    await iq.answer(results=results, cache_time=1)
 
 
 # ============ ЗАПУСК ============
