@@ -369,77 +369,46 @@ async def inline_handler(iq: types.InlineQuery):
     query = iq.query.lower().strip()
     results = []
     
-    # 1) О ботах
     if not query or "о" in query or "бот" in query:
         results.append(types.InlineQueryResultArticle(
             id="1",
             title="О ботах",
             description="Краткое инфо о ботах: Python, Aiogram",
             input_message_content=types.InputTextMessageContent(
-                message_text=(
-                    "ℹ️ Краткое Инфо о ботах:\n\n"
-                    "💬 Язык программирования: Python.\n"
-                    "📖 Библиотека: Aiogram.\n"
-                    "🤵‍♂️Кодер: @Luxscer"
-                )
+                message_text="ℹ️ Краткое Инфо о ботах:\n\n💬 Язык программирования: Python.\n📖 Библиотека: Aiogram.\n🤵‍♂️Кодер: @Luxscer"
             )
         ))
     
-    # 2) Каталог
     if not query or "каталог" in query or "чат" in query:
         results.append(types.InlineQueryResultArticle(
             id="2",
             title="Каталог",
             description="Специальные чаты: StarHub, Пряники, Мафия",
             input_message_content=types.InputTextMessageContent(
-                message_text=(
-                    "📂 Специальные чаты:\n\n"
-                    "⭐ StarHub — https://t.me/StarHub\n"
-                    "🍪 Пряники — https://t.me/StarHub_Pryaniki\n"
-                    "🔪 Мафия — https://t.me/StarHub_Mafia"
-                )
+                message_text="📂 Специальные чаты:\n\n⭐ StarHub — https://t.me/StarHub\n🍪 Пряники — https://t.me/StarHub_Pryaniki\n🔪 Мафия — https://t.me/StarHub_Mafia"
             )
         ))
     
-    # 3) Спец чат
     if not query or "спец" in query or "свой" in query:
         results.append(types.InlineQueryResultArticle(
             id="3",
             title="Сделать свой чат специальным",
             description="Инструкция как сделать чат спец",
             input_message_content=types.InputTextMessageContent(
-                message_text=(
-                    "Чтобы сделать чат специальным:\n\n"
-                    "1) Добавьте @DsStarSupportBot в чат\n"
-                    "2) Назначьте бота администратором\n"
-                    "3) Напишите в чат /special\n\n"
-                    "Бот автоматически настроит чат."
-                )
+                message_text="Чтобы сделать чат специальным:\n\n1) Добавьте @DsStarSupportBot в чат\n2) Назначьте бота администратором\n3) Напишите в чат /special\n\nБот автоматически настроит чат."
             )
         ))
     
-    # 4) Установка ботов
     if not query or "установ" in query or "уст" in query:
         results.append(types.InlineQueryResultArticle(
             id="4",
             title="Установка ботов",
             description="Установка ботов из звёздного семейства",
             input_message_content=types.InputTextMessageContent(
-                message_text=(
-                    "Установка:\n"
-                    "1) Выберите бота:\n"
-                    "@Star_def_bot.\n"
-                    "@AIStar_ai_bot.\n"
-                    "@Star_crypto_bot.\n"
-                    "@Starbots_payments_bot.\n\n"
-                    "2) Зайдите в свой чат и выберите \"Добавить участников\".\n\n"
-                    "3) Назначьте нужного бота администратором, выдая все права.\n\n"
-                    "4) Ознакомьтесь с командами."
-                )
+                message_text="Установка:\n1) Выберите бота:\n@Star_def_bot.\n@AIStar_ai_bot.\n@Star_crypto_bot.\n@Starbots_payments_bot.\n\n2) Зайдите в свой чат и выберите \"Добавить участников\".\n\n3) Назначьте нужного бота администратором, выдая все права.\n\n4) Ознакомьтесь с командами."
             )
         ))
     
-    # 5) Команды звездного семейства
     if not query or "команд" in query or "семейств" in query or "звездн" in query:
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text="🛡Саппорта", callback_data="cmd_support")],
@@ -461,14 +430,7 @@ async def inline_handler(iq: types.InlineQuery):
             title="DsStarSupportBot",
             description="Помощь по инлайн-режиму",
             input_message_content=types.InputTextMessageContent(
-                message_text=(
-                    "Инлайн-режим @DsStarSupportBot:\n\n"
-                    "• О ботах\n"
-                    "• Каталог\n"
-                    "• Сделать свой чат специальным\n"
-                    "• Установка ботов\n"
-                    "• Команды звездного семейства"
-                )
+                message_text="Инлайн-режим @DsStarSupportBot:\n\n• О ботах\n• Каталог\n• Сделать свой чат специальным\n• Установка ботов\n• Команды звездного семейства"
             )
         ))
     
@@ -478,16 +440,10 @@ async def inline_handler(iq: types.InlineQuery):
 @dp.callback_query(F.data.startswith("cmd_"))
 async def cmd_callback(c: types.CallbackQuery):
     if c.data == "cmd_support":
-        await c.message.edit_text(
-            "📋 Команды @DsStarSupportBot:\n\n"
-            "https://telegra.ph/Komandy-StarSupportBot-07-15"
-        )
+        await c.message.edit_text("📋 Команды @DsStarSupportBot:\n\nhttps://telegra.ph/Komandy-StarSupportBot-07-15")
         await c.answer()
     elif c.data == "cmd_star":
-        await c.message.edit_text(
-            "📋 Команды звёздного семейства:\n\n"
-            "https://telegra.ph/Komandy-zvezdnogo-semejstva-07-15"
-        )
+        await c.message.edit_text("📋 Команды звёздного семейства:\n\nhttps://telegra.ph/Komandy-zvezdnogo-semejstva-07-15")
         await c.answer()
 
 
