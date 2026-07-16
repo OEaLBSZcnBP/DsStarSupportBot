@@ -470,7 +470,7 @@ async def inline_handler(q: types.InlineQuery):
                 title="🤖 О ботах",
                 description="Инфо о ботах",
                 input_message_content=InputTextMessageContent(
-                    message_text="ℹ️ О ботах:\n\nЯзык программирования: Python.\nБиблиотека: Aiogram."
+                    message_text="ℹ️ Краткое Инфо о ботах:\n\n💬 Язык программирования: Python.\n📖 Библиотека: Aiogram.\n🤵‍♂️Кодер: @Luxscer"
                 )
             ),
             InlineQueryResultArticle(
@@ -503,7 +503,32 @@ async def inline_handler(q: types.InlineQuery):
                         "Если ваш чат подойдет, вы сможете добавить саппорта себе в чат."
                     )
                 )
+            ),
+            @dp.inline_query()
+async def inline_handler(iq: types.InlineQuery):
+    query = iq.query.lower().strip()
+    results = []
+    
+    if not query or "установ" in query or "уст" in query:
+        results.append(types.InlineQueryResultArticle(
+            id="1",
+            title="Установка ботов",
+            description="Установка ботов из звёздного семейства",
+            input_message_content=types.InputTextMessageContent(
+                message_text=(
+                    "Установка:\n"
+                    "1) Выберите бота:\n"
+                    "@Star_def_bot.\n"
+                    "@AIStar_ai_bot.\n"
+                    "@Star_crypto_bot.\n"
+                    "@Starbots_payments_bot.\n\n"
+                    "2) Зайдите в свой чат и выберите \"Добавить участников\".\n\n"
+                    "3) Назначьте нужного бота администратором, выдая все права.\n\n"
+                    "4) Ознакомьтесь с командами."
+                )
             )
+        )
+            
         ]
 
     await q.answer(results, cache_time=0, is_personal=True)
