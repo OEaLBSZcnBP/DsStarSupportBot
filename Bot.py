@@ -2,13 +2,11 @@ import os
 import asyncio
 import re
 import sqlite3
-import aiohttp
 import math
 from datetime import datetime, timedelta
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent
-from aiogram.enums import ChatMemberStatus
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
@@ -21,9 +19,9 @@ dp = Dispatcher()
 
 # ============ БАЗА ДАННЫХ ============
 db = sqlite3.connect("moderation.db")
-db.execute("CREATE TABLE IF NOT EXISTS warns (user_id INTEGER, chat_id INTEGER, count INTEGER, last_warn DATETIME, PRIMARY KEY(user_id, chat_id))")
-db.execute("CREATE TABLE IF NOT EXISTS mutes (user_id INTEGER, chat_id INTEGER, until DATETIME, PRIMARY KEY(user_id, chat_id))")
-db.execute("CREATE TABLE IF NOT EXISTS bans (user_id INTEGER, chat_id INTEGER, until DATETIME, PRIMARY KEY(user_id, chat_id))")
+db.execute("CREATE TABLE IF NOT EXISTS warns (user_id INTEGER, chat_id INTEGER, count INTEGER, last_warn TEXT, PRIMARY KEY(user_id, chat_id))")
+db.execute("CREATE TABLE IF NOT EXISTS mutes (user_id INTEGER, chat_id INTEGER, until TEXT, PRIMARY KEY(user_id, chat_id))")
+db.execute("CREATE TABLE IF NOT EXISTS bans (user_id INTEGER, chat_id INTEGER, until TEXT, PRIMARY KEY(user_id, chat_id))")
 db.commit()
 
 
@@ -126,7 +124,7 @@ async def ban(m: types.Message):
         return await m.answer("❌ Укажите: /ban 5 дней @user или реплай")
     parts = m.text.split()
     time_text = None
-    for i, p in enumerate(parts[1:]):
+    for p in parts[1:]:
         if not p.startswith("@") and not p.isdigit() and p != parts[1]:
             time_text = p
             break
@@ -134,7 +132,7 @@ async def ban(m: types.Message):
     until = datetime.now() + td if td else None
     try:
         await bot.ban_chat_member(m.chat.id, target.id, until_date=until)
-        db.execute("INSERT OR REPLACE INTO bans VALUES (?, ?, ?)", (target.id, m.chat.id, until))
+        db.execute("INSERT OR REPLACE INTO bans VALUES (?, ?, ?)", (target.id, m.chat.id, until.isoformat() if until else None))
         db.commit()
         name = f"@{target.username}" if target.username else target.first_name
         period = format_td(td) if td else "навсегда"
@@ -186,7 +184,7 @@ async def mute(m: types.Message):
     until = datetime.now() + td
     try:
         await bot.restrict_chat_member(m.chat.id, target.id, types.ChatPermissions(), until_date=until)
-        db.execute("INSERT OR REPLACE INTO mutes VALUES (?, ?, ?)", (target.id, m.chat.id, until))
+        db.execute("INSERT OR REPLACE INTO mutes VALUES (?, ?, ?)", (target.id, m.chat.id, until.isoformat()))
         db.commit()
         name = f"@{target.username}" if target.username else target.first_name
         reason = "не указана"
@@ -212,8 +210,15 @@ async def unmute(m: types.Message):
         return await m.answer("❌ Укажите: /unmute @user")
     try:
         await bot.restrict_chat_member(m.chat.id, target.id, types.ChatPermissions(
-            can_send_messages=True, can_send_media_messages=True,
-            can_send_polls=True, can_send_other_messages=True,
+            can_send_messages=True, 
+            can_send_audios=True,
+            can_send_documents=True,
+            can_send_photos=True,
+            can_send_videos=True,
+            can_send_video_notes=True,
+            can_send_voice_notes=True,
+            can_send_polls=True, 
+            can_send_other_messages=True,
             can_add_web_page_previews=True
         ))
         db.execute("DELETE FROM mutes WHERE user_id=? AND chat_id=?", (target.id, m.chat.id))
@@ -234,7 +239,7 @@ async def warn(m: types.Message):
     cur = db.execute("SELECT count, last_warn FROM warns WHERE user_id=? AND chat_id=?", (target.id, m.chat.id))
     row = cur.fetchone()
     count = (row[0] if row else 0) + 1
-    now = datetime.now()
+    now = datetime.now().isoformat()
     db.execute("INSERT OR REPLACE INTO warns VALUES (?, ?, ?, ?)", (target.id, m.chat.id, count, now))
     db.commit()
     name = f"@{target.username}" if target.username else target.first_name
@@ -348,7 +353,7 @@ async def calc(m: types.Message):
     expr = args[1].replace(" ", "").replace("×", "*").replace("÷", "/").replace("−", "-").replace(",", ".")
     expr = expr.replace("√(", "math.sqrt(").replace("sqrt(", "math.sqrt(").replace("^", "**").replace("π", "math.pi")
     try:
-        res = eval(expr, {"math": math, "__builtins__": {}})
+        res = eval(expr, {"math": math, "builtins": {}})
         await m.answer(f"🧮 {args[1]} = {res}")
     except Exception as e:
         await m.answer(f"❌ Ошибка: {str(e)[:80]}")
@@ -470,7 +475,7 @@ async def inline_handler(q: types.InlineQuery):
                 title="🤖 О ботах",
                 description="Инфо о ботах",
                 input_message_content=InputTextMessageContent(
-                    message_text="ℹ️ О ботах:\n\nЯзык программирования: Python.\nБиблиотека: Aiogram./nКодер:@Luxscer"
+                    message_text="ℹ️ О ботах:\n\nЯзык программирования: Python.\nБиблиотека: Aiogram.\nКодер:@Luxscer"
                 )
             ),
             InlineQueryResultArticle(
@@ -504,38 +509,36 @@ async def inline_handler(q: types.InlineQuery):
                     )
                 )
             ),
-          results = [
-    InlineQueryResultArticle(
-        id="install_bots",
-        title="Установка ботов",
-        description="Установка ботов из звёздного семейства.",
-        input_message_content=InputTextMessageContent(
-            message_text=(
-                "Установка:\n"
-                "1) Выберите бота:\n"
-                "@Star_def_bot.\n"
-                "@AIStar_ai_bot.\n"
-                "@Star_crypto_bot.\n"
-                "@Starbots_payments_bot.\n\n"
-                "2) Зайдите в свой чат и выберите \"Добавить участников\".\n\n"
-                "3) Назначьте нужного бота администратором, выдая все права.\n\n"
-                "4) Ознакомьтесь с командами."
-            )
-        )
-    ),
-    InlineQueryResultArticle(
-        id="star_commands",
-        title="Команды звездного семейства",
-        description="Все команды звёздного семейства.",
-        input_message_content=InputTextMessageContent(
-            message_text=(
-                "📋 Список команд какого бота вас интересует?\n"
-                "Саппорта: https://telegra.ph/Komandy-StarSupportBot-07-15\n\n"
-                "Звездного семейства: https://telegra.ph/Komandy-zvezdnogo-semejstva-07-15"
+            InlineQueryResultArticle(
+                id="install_bots",
+                title="Установка ботов",
+                description="Установка ботов из звёздного семейства.",
+                input_message_content=InputTextMessageContent(
+                    message_text=(
+                        "Установка:\n"
+                        "1) Выберите бота:\n"
+                        "@Star_def_bot.\n"
+                        "@AIStar_ai_bot.\n"
+                        "@Star_crypto_bot.\n"
+                        "@Starbots_payments_bot.\n\n"
+                        "2) Зайдите в свой чат и выберите \"Добавить участников\".\n\n"
+                        "3) Назначьте нужного бота администратором, выдая все права.\n\n"
+                        "4) Ознакомьтесь с командами."
+                    )
+                )
             ),
-            # disable_web_page_preview=True  # Раскомментируйте, если нужно скрыть превью ссылок
-        )
-    )
+            InlineQueryResultArticle(
+                id="star_commands",
+                title="Команды звездного семейства",
+                description="Все команды звёздного семейства.",
+                input_message_content=InputTextMessageContent(
+                    message_text=(
+                        "📋 Список команд какого бота вас интересует?\n"
+                        "Саппорта: https://telegra.ph/Komandy-StarSupportBot-07-15\n\n"
+                        "Звездного семейства: https://telegra.ph/Komandy-zvezdnogo-semejstva-07-15"
+                    )
+                )
+            )
         ]  
 
     await q.answer(results, cache_time=0, is_personal=True)
