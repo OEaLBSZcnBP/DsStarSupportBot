@@ -383,7 +383,7 @@ async def search(m: types.Message):
     await m.answer(f"🔍 {url}")
 
 
-@router.message(F.text.startswith("/currency"))
+@dp.message(Command("/currency"))
 async def cmd_currency(message: Message):
     fiat = await get_currency_rates()
     crypto = await get_crypto_rates()
