@@ -383,6 +383,30 @@ async def search(m: types.Message):
     await m.answer(f"🔍 {url}")
 
 
+@router.message(F.text.startswith("/currency"))
+async def cmd_currency(message: Message):
+    fiat = await get_currency_rates()
+    crypto = await get_crypto_rates()
+    txt = "💱 <b>Курсы</b>\n\n"
+    if fiat:
+        txt += "<b>Фиат (1 USD =):</b>\n"
+        names = {"RUB": "🇷🇺 Рубль", "EUR": "🇪🇺 Евро", "UAH": "🇺🇦 Гривна", "TRY": "🇹🇷 Лира", "KZT": "🇰🇿 Тенге", "BYN": "🇧🇾 Рубль (Беларусь)", "GBP": "🇬🇧 Фунт", "CNY": "🇨🇳 Юань"}
+        for code, value in fiat.items():
+            if code in names:
+                txt += f"{names[code]}: <b>{value:.2f}</b>\n"
+    if crypto:
+        txt += "\n<b>Крипто (в USD):</b>\n"
+        cnames = {"BTC": "₿ Bitcoin", "ETH": "Ξ Ethereum", "TON": "💎 Toncoin", "SOL": "◎ Solana", "BNB": "🟡 BNB", "XRP": "✕ Ripple", "DOGE": "🐕 Doge", "TRX": "🔺 TRON"}
+        for code, value in crypto.items():
+            if code in cnames:
+                txt += f"{cnames[code]}: <b>${value:,.2f}</b>\n"
+    if not fiat and not crypto:
+        await message.reply("❌ Не удалось получить курсы. Попробуй позже.")
+        return
+    txt += f"\n📊 Обновлено: {datetime.now().strftime('%H:%M %d.%m.%Y')}"
+    await message.reply(txt, parse_mode="HTML")
+
+
 @dp.message(Command("help"))
 async def help_cmd(m: types.Message):
     await m.answer(
