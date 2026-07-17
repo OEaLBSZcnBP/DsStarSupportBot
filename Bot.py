@@ -513,7 +513,7 @@ async def inline_handler(q: types.InlineQuery):
                         "@Star_def_bot.\n"
                         "@AIStar_ai_bot.\n"
                         "@Star_crypto_bot.\n"
-                        "@Starbots_payments_bot.\n\n"
+                        "@DsStar_info_bot.\n\n"
                         "2) Зайдите в свой чат и выберите \"Добавить участников\".\n\n"
                         "3) Назначьте нужного бота администратором, выдая все права.\n\n"
                         "4) Ознакомьтесь с командами."
