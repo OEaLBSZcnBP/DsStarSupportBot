@@ -17,7 +17,6 @@ OWNER_ID = int(os.getenv("OWNER_ID", "0"))
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# ============ БАЗА ДАННЫХ ============
 db = sqlite3.connect("moderation.db")
 db.execute("CREATE TABLE IF NOT EXISTS warns (user_id INTEGER, chat_id INTEGER, count INTEGER, last_warn TEXT, PRIMARY KEY(user_id, chat_id))")
 db.execute("CREATE TABLE IF NOT EXISTS mutes (user_id INTEGER, chat_id INTEGER, until TEXT, PRIMARY KEY(user_id, chat_id))")
@@ -25,7 +24,6 @@ db.execute("CREATE TABLE IF NOT EXISTS bans (user_id INTEGER, chat_id INTEGER, u
 db.commit()
 
 
-# ============ ПАРСЕР ВРЕМЕНИ ============
 def parse_time(text):
     m = re.match(r"^(\d+)\s*(секунд|сек|second|sec|s|минут|мин|минуты|min|m|час|часа|часов|hour|h|дней|день|дня|day|d|недел|неделя|недели|week|w|месяц|month|mo|год|года|лет|year|y)?$", text.strip().lower())
     if not m:
@@ -82,7 +80,6 @@ async def get_target(m):
     return None
 
 
-# ============ /start ============
 @dp.message(Command("start"))
 async def start(m: types.Message):
     user = m.from_user
@@ -95,7 +92,6 @@ async def start(m: types.Message):
     )
 
 
-# ============ /commands ============
 @dp.message(Command("commands"))
 async def commands(m: types.Message):
     kb = InlineKeyboardMarkup(inline_keyboard=[
@@ -114,7 +110,6 @@ async def cmds_cb(c: types.CallbackQuery):
     await c.answer()
 
 
-# ============ МОДЕРАЦИЯ ============
 @dp.message(Command("ban", "бан"))
 async def ban(m: types.Message):
     if m.chat.type == "private":
@@ -344,7 +339,6 @@ async def report(m: types.Message):
             pass
 
 
-# ============ ПРОЧЕЕ ============
 @dp.message(Command("calculator", "calc"))
 async def calc(m: types.Message):
     args = m.text.split(maxsplit=1)
@@ -411,7 +405,6 @@ async def help_cmd(m: types.Message):
         "💡 Инлайн: @DsStarSupportBot каталог / о ботах / сделать чат спец.")
 
 
-# ============ INLINE РЕЖИМ ============
 @dp.inline_query()
 async def inline_handler(q: types.InlineQuery):
     query = q.query.strip().lower()
@@ -475,7 +468,7 @@ async def inline_handler(q: types.InlineQuery):
                 title="🤖 О ботах",
                 description="Инфо о ботах",
                 input_message_content=InputTextMessageContent(
-                    message_text="ℹ️ О ботах:\n\nЯзык программирования: Python.\nБиблиотека: Aiogram.\nКодер:@Luxscer"
+                    message_text="ℹ️ О ботах:\n\nЯзык программирования: Python.\nБиблиотека: Aiogram.\nКодер: @Luxscer"
                 )
             ),
             InlineQueryResultArticle(
@@ -544,9 +537,8 @@ async def inline_handler(q: types.InlineQuery):
     await q.answer(results, cache_time=0, is_personal=True)
 
 
-# ============ ЗАПУСК ============
 async def main():
-    print("✅ Бот запущен!")
+    print("Бот запущен!")
     await dp.start_polling(bot)
 
 
