@@ -383,6 +383,45 @@ async def search(m: types.Message):
     await m.answer(f"🔍 {url}")
 
 
+@dp.message(Command("course", "price"))
+async def course(m: types.Message):
+    t = "💹 КУРСЫ В ДОЛЛАРАХ (USD):\n\n📊 Крипта:\n"
+    try:
+        async with aiohttp.ClientSession() as s:
+            url = "https://api.coinpaprika.com/v1/tickers"
+            async with s.get(url, timeout=10) as r:
+                d = await r.json()
+                ids = {
+                    "btc-bitcoin": "BTC", "eth-ethereum": "ETH", "sol-solana": "SOL",
+                    "toncoin-ton": "TON", "doge-dogecoin": "DOGE", "xrp-xrp": "XRP",
+                    "bnb-binance-coin": "BNB", "ada-cardano": "ADA", "trx-tron": "TRX",
+                    "matic-polygon": "MATIC", "ltc-litecoin": "LTC", "avax-avalanche": "AVAX",
+                    "dot-polkadot": "DOT", "link-chainlink": "LINK", "near-near-protocol": "NEAR",
+                    "atom-cosmos": "ATOM"
+                }
+                for x in d:
+                    if x["id"] in ids:
+                        p = x["quotes"]["USD"]["price"]
+                        t += f"{ids[x['id']]}: ${p:,.4f}\n"
+    except:
+        t += "⚠️ крипта недоступна\n"
+
+    t += "\n💵 Фиат (1 единица = $):\n"
+    try:
+        async with aiohttp.ClientSession() as s:
+            url = "https://api.exchangerate-api.com/v4/latest/USD"
+            async with s.get(url, timeout=10) as r:
+                d = await r.json()
+                rates = d.get("rates", {})
+                for code, name in [("RUB", "₽ Рубль"), ("EUR", "€ Евро"), ("CNY", "¥ Юань"), ("GBP", "£ Фунт"), ("JPY", "¥ Йена"), ("KZT", "₸ Тенге"), ("UAH", "₴ Гривна"), ("TRY", "₺ Лира")]:
+                    if code in rates:
+                        t += f"1 {code} = ${rates[code]:.4f}\n"
+    except:
+        t += "⚠️ фиат недоступен"
+
+    await m.answer(t)
+
+
 @dp.message(Command("help"))
 async def help_cmd(m: types.Message):
     await m.answer(
