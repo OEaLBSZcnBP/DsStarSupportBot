@@ -423,22 +423,22 @@ async def search(m: types.Message):
     await m.answer(f"🔍 {url}")
 
 
-@dp.message(Command("id"))
+@router.message(Command("id"))
 async def cmd_id(message: Message):
-    args = message.text.strip().split(maxsplit=1)
-    if len(args) < 2:
-        await message.reply("❌ /id @username")
+    parts = (message.text or "").split()
+    if len(parts) < 2:
+        await message.reply("Укажите username: /id @username")
         return
 
-    username = args[1].strip()
-    if not username.startswith("@"):
-        username = "@" + username
+    target = parts[1]
+    if not target.startswith("@"):
+        target = "@" + target
 
     try:
-        chat = await bot.get_chat(username)
-        await message.reply(f"🆔 ID: <code>{chat.id}</code>", parse_mode="HTML")
-    except:
-        await message.reply("❌ Пользователь не найден")
+        chat = await bot.get_chat(target)
+        await message.reply(f"ID пользователя: {chat.id}")
+    except Exception:
+        await message.reply("Не удалось получить ID. Проверьте username.")
 
 
 @dp.message(Command("help"))
