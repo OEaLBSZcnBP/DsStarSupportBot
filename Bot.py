@@ -423,7 +423,7 @@ async def search(m: types.Message):
     await m.answer(f"🔍 {url}")
 
 
-@router.message(F.text.startswith("/id"))
+@dp.message(Command("id"))
 async def cmd_id(message: Message):
     if message.reply_to_message and message.reply_to_message.from_user:
         u = message.reply_to_message.from_user
