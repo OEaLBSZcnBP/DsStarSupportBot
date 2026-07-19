@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
 from aiogram.types import InlineKeyboardButton, InlineKeyboardMarkup, InlineQueryResultArticle, InputTextMessageContent
+import aiohttp
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 if not BOT_TOKEN:
@@ -353,6 +354,45 @@ async def calc(m: types.Message):
         await m.answer(f"❌ Ошибка: {str(e)[:80]}")
 
 
+@dp.message(Command("Currency", "currency", "курс", "курсы"))
+async def course(m: types.Message):
+    t = "💹 КУРСЫ В ДОЛЛАРАХ (USD):\n\n📊 Крипта:\n"
+    try:
+        async with aiohttp.ClientSession() as s:
+            url = "https://api.coinpaprika.com/v1/tickers"
+            async with s.get(url, timeout=10) as r:
+                d = await r.json()
+                ids = {
+                    "btc-bitcoin": "BTC", "eth-ethereum": "ETH", "sol-solana": "SOL",
+                    "toncoin-ton": "TON", "doge-dogecoin": "DOGE", "xrp-xrp": "XRP",
+                    "bnb-binance-coin": "BNB", "ada-cardano": "ADA", "trx-tron": "TRX",
+                    "matic-polygon": "MATIC", "ltc-litecoin": "LTC", "avax-avalanche": "AVAX",
+                    "dot-polkadot": "DOT", "link-chainlink": "LINK", "near-near-protocol": "NEAR",
+                    "atom-cosmos": "ATOM"
+                }
+                for x in d:
+                    if x["id"] in ids:
+                        p = x["quotes"]["USD"]["price"]
+                        t += f"{ids[x['id']]}: ${p:,.4f}\n"
+    except:
+        t += "⚠️ крипта недоступна\n"
+
+    t += "\n💵 Фиат (1 единица = $):\n"
+    try:
+        async with aiohttp.ClientSession() as s:
+            url = "https://api.exchangerate-api.com/v4/latest/USD"
+            async with s.get(url, timeout=10) as r:
+                d = await r.json()
+                rates = d.get("rates", {})
+                for code, name in [("RUB", "₽ Рубль"), ("EUR", "€ Евро"), ("CNY", "¥ Юань"), ("GBP", "£ Фунт"), ("JPY", "¥ Йена"), ("KZT", "₸ Тенге"), ("UAH", "₴ Гривна"), ("TRY", "₺ Лира")]:
+                    if code in rates:
+                        t += f"1 {code} = ${rates[code]:.4f}\n"
+    except:
+        t += "⚠️ фиат недоступен"
+
+    await m.answer(t)
+
+
 @dp.message(Command("meta", "мета"))
 async def meta(m: types.Message):
     await m.answer(
@@ -398,6 +438,7 @@ async def help_cmd(m: types.Message):
         "• /kick @user — кик\n"
         "• /report — жалоба (реплай)\n"
         "• /calculator 2+2 — калькулятор\n"
+        "• /Currency — курсы валют и крипты\n"
         "• /meta — про мета-вопросы\n"
         "• /offtop — про оффтоп\n"
         "• /search запрос — Яндекс\n"
@@ -442,7 +483,7 @@ async def inline_handler(q: types.InlineQuery):
             )
         )
 
-    if query in ["сделать свой чат специальным", "спец чат", "спецчат", "сделать спец", "сделать чат специальным", "специальный чат"]:
+    if query in ["сделать свой чат специальным", "спец чат", "спецчат", "сделать спец", "сделать чат специальным", "сделать чат специальным", "специальный чат"]:
         results.append(
             InlineQueryResultArticle(
                 id="specchat-1",
