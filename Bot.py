@@ -111,6 +111,14 @@ async def cmds_cb(c: types.CallbackQuery):
     await c.answer()
 
 
+@dp.message(Command("id"))
+async def get_id(m: types.Message):
+    target = await get_target(m)
+    if not target:
+        return await m.answer("❌ Укажите: /id @user или реплай")
+    await m.answer(f"🆔 ID пользователя: <code>{target.id}</code>", parse_mode="HTML")
+
+
 @dp.message(Command("ban", "бан"))
 async def ban(m: types.Message):
     if m.chat.type == "private":
@@ -423,22 +431,12 @@ async def search(m: types.Message):
     await m.answer(f"🔍 {url}")
 
 
-@dp.message(Command("id"))
-async def cmd_id(message: Message):
-    if message.reply_to_message and message.reply_to_message.from_user:
-        u = message.reply_to_message.from_user
-        await message.reply(f"👤 ID: <code>{u.id}</code>\nИмя: {u.first_name}\nUsername: @{u.username or 'нет'}", parse_mode="HTML")
-    else:
-        u = message.from_user
-        chat = message.chat
-        await message.reply(f"Твой ID: <code>{u.id}</code>\nЧат ID: <code>{chat.id}</code>\nИмя: {u.first_name}", parse_mode="HTML")
-
-
 @dp.message(Command("help"))
 async def help_cmd(m: types.Message):
     await m.answer(
         "📋 Команды:\n\n"
         "• /start — приветствие\n"
+        "• /id @user — получить ID\n"
         "• /ban 5 дней @user — бан\n"
         "• /unban @user — разбан\n"
         "• /mute 7 дней @user — мут\n"
@@ -567,7 +565,7 @@ async def inline_handler(q: types.InlineQuery):
                         "@Star_crypto_bot.\n"
                         "@DsStar_info_bot.\n\n"
                         "2) Зайдите в свой чат и выберите \"Добавить участников\".\n\n"
-                        "3) Назначьте нужного бота администратором, выдая все права.\n\n"
+                        "3) Назначьте нужного бота администратором, выдавая все права.\n\n"
                         "4) Ознакомьтесь с командами."
                     )
                 )
