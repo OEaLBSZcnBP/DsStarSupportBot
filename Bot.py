@@ -61,23 +61,45 @@ def format_td(td):
     return f"{sec // 2592000} мес"
 
 
-async def get_target(m):
+async def get_target(m: types.Message):
     if m.reply_to_message:
         return m.reply_to_message.from_user
-    parts = m.text.split()
+
+    text = m.text or m.caption or ""
+    parts = text.split()
+
     for p in parts[1:]:
         if p.startswith("@"):
+            username = p[1:]
             try:
-                u = await bot.get_chat(p)
+                u = await bot.get_chat(username)
                 return u
             except:
-                pass
-        if p.isdigit():
+                try:
+                    u = await bot.get_chat(p)
+                    return u
+                except:
+                    continue
+        elif p.isdigit():
             try:
                 u = await bot.get_chat(int(p))
                 return u
             except:
-                pass
+                continue
+
+    if m.entities:
+        for entity in m.entities:
+            if entity.type == "mention":
+                mention = text[entity.offset:entity.offset + entity.length]
+                username = mention.lstrip("@")
+                try:
+                    u = await bot.get_chat(username)
+                    return u
+                except:
+                    continue
+            elif entity.type == "text_mention":
+                return entity.user
+
     return None
 
 
